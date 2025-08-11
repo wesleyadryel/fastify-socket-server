@@ -18,7 +18,7 @@ Fastify Socket Server is a modern API gateway built with Fastify, featuring WebS
 Clone the repository and install dependencies:
 
 ```sh
-pnpm install
+npm install
 ```
 
 
@@ -43,11 +43,11 @@ Descriptions:
 
 ## Scripts
 
-- `pnpm dev` — Starts the server in development mode with TypeScript.
-- `pnpm build` — Generates the production bundle.
-- `pnpm start` — Runs the generated bundle.
-- `pnpm test` — Runs automated tests.
-- `pnpm lint` — Checks code style with ESLint.
+- `npm run dev` — Starts the server in development mode with TypeScript.
+- `npm run build` — Generates the production bundle.
+- `npm start` — Runs the generated bundle.
+- `npm test` — Runs automated tests.
+- `npm run lint` — Checks code style with ESLint.
 
 ## Basic Usage
 
@@ -87,7 +87,7 @@ socket.on('connect', () => {
 Tests use Jest. To run:
 
 ```sh
-pnpm test
+npm test
 ```
 
 ## Contributing
