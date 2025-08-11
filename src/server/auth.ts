@@ -1,8 +1,12 @@
 import { Socket } from 'socket.io';
 import { ExtendedError } from 'socket.io/dist/namespace';
-import { SocketData } from '../types';
 import { jwtManager } from '../jwt';
 import { Log } from '../utils/log';
+
+export interface SocketData {
+  userId?: string;
+  authenticated?: boolean;
+}
 
 export const authMiddleware = (
   socket: Socket<any, any, any, SocketData>,
