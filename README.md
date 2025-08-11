@@ -21,15 +21,25 @@ Clone the repository and install dependencies:
 pnpm install
 ```
 
+
 ## Configuration
 
-Create a `.env` file in the project root with the following variable:
+Create a `.env` file in the project root with the following variables:
 
 ```
 JWT_SECRET=your_secret_key
+API_TOKEN=your_api_token
+PROMETHEUS_PREFIX=your_prometheus_prefix # optional, default: node_fastfy
+Debug=true # optional, enables debug logging
+NODE_ENV=development # or production
 ```
 
-Other variables can be added as needed.
+Descriptions:
+- `JWT_SECRET`: Secret key for signing JWT tokens (required)
+- `API_TOKEN`: Token required for API authentication (required for JWT endpoints)
+- `PROMETHEUS_PREFIX`: Prefix for Prometheus metrics (optional)
+- `Debug`: Enables debug logging if set to 'true' (optional)
+- `NODE_ENV`: Node.js environment (optional, affects logging and metrics)
 
 ## Scripts
 
