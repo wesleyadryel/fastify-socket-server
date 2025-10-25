@@ -10,20 +10,15 @@ class ReconnectionManager {
 
   async handleReconnection(jwtToken: string, socketId: string, userId: string): Promise<boolean> {
     try {
-      // Check if user exists in storage by JWT
       const storedUser = await redisStorage.getUserByJWT(jwtToken);
       if (!storedUser) {
-        // No stored user found
         return false;
       }
 
-      // Verify user ID matches
       if (storedUser.userId !== userId) {
-        // User ID mismatch
         return false;
       }
 
-      // Update socket data with stored information
       if (this.io) {
         const socket = this.io.sockets.sockets.get(socketId);
         if (socket) {
@@ -31,12 +26,10 @@ class ReconnectionManager {
           socket.data.authenticated = storedUser.authenticated;
           socket.data.user = storedUser.user;
 
-          // Join stored rooms
           for (const room of storedUser.rooms) {
             socket.join(room);
           }
 
-          // User reconnected and restored to rooms
           return true;
         }
       }

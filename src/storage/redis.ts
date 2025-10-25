@@ -35,16 +35,11 @@ class RedisStorage {
         console.error('Redis connection error:', err);
       });
 
-      this.redis.on('connect', () => {
-        // Connected to Redis
-      });
-    } else {
-      // Using local cache storage
+      this.redis.on('connect', () => {});
     }
   }
 
   private getJWTKey(jwtToken: string): string {
-    // Usar hash do JWT para evitar caracteres especiais na chave
     const crypto = require('crypto');
     const hash = crypto.createHash('sha256').update(jwtToken).digest('hex');
     return `${storageConfig.userKeyPrefix}:${hash}`;
@@ -63,7 +58,6 @@ class RedisStorage {
 
     if (this.useRedis && this.redis) {
       try {
-        // Armazenar como hashmap no Redis
         const key = this.getJWTKey(jwtToken);
         await this.redis.hset(key, {
           socketId: userData.socketId,
@@ -75,7 +69,6 @@ class RedisStorage {
           rooms: JSON.stringify(userData.rooms)
         });
         await this.redis.expire(key, this.ttl);
-        // User stored in Redis
         storageEvents.emitUserEvent('user_connected', socketId, userId, user);
       } catch (error) {
         console.error('Redis storage error:', error);
@@ -83,7 +76,6 @@ class RedisStorage {
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      // User stored in local cache
       storageEvents.emitUserEvent('user_connected', socketId, userId, user);
     }
   }
@@ -101,7 +93,6 @@ class RedisStorage {
 
     if (this.useRedis && this.redis) {
       try {
-        // Atualizar como hashmap no Redis
         const key = this.getJWTKey(jwtToken);
         await this.redis.hset(key, {
           socketId: userData.socketId,
@@ -113,7 +104,6 @@ class RedisStorage {
           rooms: JSON.stringify(userData.rooms)
         });
         await this.redis.expire(key, this.ttl);
-        // User updated in Redis
         storageEvents.emitUserEvent('user_updated', socketId, userId, user);
       } catch (error) {
         console.error('Redis update error:', error);
@@ -121,7 +111,6 @@ class RedisStorage {
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      // User updated in local cache
       storageEvents.emitUserEvent('user_updated', socketId, userId, user);
     }
   }
@@ -133,7 +122,6 @@ class RedisStorage {
         if (userData) {
           await this.redis.del(this.getJWTKey(jwtToken));
         }
-        // User removed from Redis
         if (userData) {
           storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.userId, userData.user);
         }
@@ -144,7 +132,6 @@ class RedisStorage {
     } else {
       const userData = this.localCache.get(jwtToken);
       this.localCache.delete(jwtToken);
-      // User removed from local cache
       if (userData) {
         storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.userId, userData.user);
       }
@@ -178,7 +165,6 @@ class RedisStorage {
   }
 
   async getUserBySocketId(socketId: string): Promise<StoredUser | undefined> {
-    // Buscar por iteração em todos os usuários (simples e direto)
     const allUsers = await this.getAllUsers();
     return allUsers.find(user => user.socketId === socketId);
   }
@@ -204,7 +190,6 @@ class RedisStorage {
           }
         }
         
-        // Retrieved users from Redis
         return users;
       } catch (error) {
         console.error('Redis getAllUsers error:', error);
@@ -212,13 +197,11 @@ class RedisStorage {
       }
     } else {
       const users = Array.from(this.localCache.values());
-      // Retrieved users from local cache
       return users;
     }
   }
 
   async getUsersByUserId(userId: string): Promise<StoredUser[]> {
-    // Buscar por iteração em todos os usuários (simples e direto)
     const allUsers = await this.getAllUsers();
     return allUsers.filter(user => user.userId === userId);
   }

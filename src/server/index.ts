@@ -52,7 +52,6 @@ app.register(errorHandlerPlugin);
 app.ready(async (err) => {
   if (err) throw err;
   
-  // Initialize storage system
   await initializeStorage();
   
   if (process.env.NODE_ENV === 'development') {
@@ -69,7 +68,6 @@ app.ready(async (err) => {
     }
   }
   
-  // Configure reconnection manager
   reconnectionManager.setIO(app.io);
   
   app.io.on('connection', (socket: any) => {
@@ -83,15 +81,12 @@ if (process.env.NODE_ENV !== 'test') {
   app.listen({ port: 3000, host: '0.0.0.0' });
 }
 
-// Graceful shutdown
 process.on('SIGINT', async () => {
-  // Received SIGINT, shutting down gracefully
   await shutdownStorage();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  // Received SIGTERM, shutting down gracefully
   await shutdownStorage();
   process.exit(0);
 });

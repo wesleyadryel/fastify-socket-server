@@ -18,14 +18,12 @@ class CleanupManager {
       }
     }, this.cleanupIntervalMs);
 
-    // Cleanup manager started
   }
 
   stopCleanup(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
-      // Cleanup manager stopped
     }
   }
 
@@ -43,12 +41,10 @@ class CleanupManager {
         if (timeDiff > maxInactiveTime) {
           await redisStorage.removeUser(user.socketId);
           cleanedCount++;
-          // Cleaned up inactive user
         }
       }
 
       if (cleanedCount > 0) {
-        // Cleanup completed
       }
     } catch (error) {
       console.error('Error during cleanup:', error);
@@ -56,7 +52,6 @@ class CleanupManager {
   }
 
   async forceCleanup(): Promise<void> {
-    // Force cleanup started
     await this.performCleanup();
   }
 }

@@ -21,7 +21,6 @@ class StorageEventEmitter extends EventEmitter {
     this.emit('user_event', event);
     this.emit(type, event);
     
-    // Storage event emitted
   }
 
   onUserEvent(callback: (event: UserEvent) => void): void {
