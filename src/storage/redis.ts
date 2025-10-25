@@ -59,11 +59,13 @@ class RedisStorage {
     if (this.useRedis && this.redis) {
       try {
         const key = this.getJWTKey(jwtToken);
+        const userJson = JSON.stringify(userData.user);
+        
         await this.redis.hset(key, {
           socketId: userData.socketId,
           userId: userData.userId,
           authenticated: userData.authenticated.toString(),
-          user: JSON.stringify(userData.user),
+          user: userJson,
           connectedAt: userData.connectedAt,
           lastSeen: userData.lastSeen,
           rooms: JSON.stringify(userData.rooms)
@@ -144,14 +146,29 @@ class RedisStorage {
         const key = this.getJWTKey(jwtToken);
         const data = await this.redis.hgetall(key);
         if (data && Object.keys(data).length > 0) {
+          let userData = {};
+          let roomsData = [];
+          
+          try {
+            userData = JSON.parse(data.user);
+          } catch (e) {
+            console.error('Error parsing user data:', data.user);
+          }
+          
+          try {
+            roomsData = JSON.parse(data.rooms);
+          } catch (e) {
+            console.error('Error parsing rooms data:', data.rooms);
+          }
+          
           return {
             socketId: data.socketId,
             userId: data.userId,
             authenticated: data.authenticated === 'true',
-            user: JSON.parse(data.user),
+            user: userData,
             connectedAt: data.connectedAt,
             lastSeen: data.lastSeen,
-            rooms: JSON.parse(data.rooms)
+            rooms: roomsData
           };
         }
         return undefined;
@@ -178,14 +195,29 @@ class RedisStorage {
         for (const key of keys) {
           const data = await this.redis.hgetall(key);
           if (data && Object.keys(data).length > 0) {
+            let userData = {};
+            let roomsData = [];
+            
+            try {
+              userData = JSON.parse(data.user);
+            } catch (e) {
+              console.error('Error parsing user data:', data.user);
+            }
+            
+            try {
+              roomsData = JSON.parse(data.rooms);
+            } catch (e) {
+              console.error('Error parsing rooms data:', data.rooms);
+            }
+            
             users.push({
               socketId: data.socketId,
               userId: data.userId,
               authenticated: data.authenticated === 'true',
-              user: JSON.parse(data.user),
+              user: userData,
               connectedAt: data.connectedAt,
               lastSeen: data.lastSeen,
-              rooms: JSON.parse(data.rooms)
+              rooms: roomsData
             });
           }
         }
@@ -256,6 +288,59 @@ class RedisStorage {
     }
   }
 
+
+  async getUsersWithDetails(): Promise<any[]> {
+    if (this.useRedis && this.redis) {
+      try {
+        const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
+        const users = [];
+        
+        for (const key of keys) {
+          const data = await this.redis.hgetall(key);
+          
+          if (data && Object.keys(data).length > 0) {
+            let userData = {};
+            let roomsData = [];
+            
+            if (data.user) {
+              try {
+                userData = JSON.parse(data.user);
+              } catch (e) {
+                console.error('Error parsing user data:', data.user, e);
+              }
+            }
+            
+            if (data.rooms) {
+              try {
+                roomsData = JSON.parse(data.rooms);
+              } catch (e) {
+                console.error('Error parsing rooms data:', data.rooms, e);
+              }
+            }
+            
+            const user = {
+              socketId: data.socketId,
+              userId: data.userId,
+              authenticated: data.authenticated === 'true',
+              user: userData,
+              connectedAt: data.connectedAt,
+              lastSeen: data.lastSeen,
+              rooms: roomsData
+            };
+            
+            users.push(user);
+          }
+        }
+        
+        return users;
+      } catch (error) {
+        console.error('Redis getUsersWithDetails error:', error);
+        return Array.from(this.localCache.values());
+      }
+    } else {
+      return Array.from(this.localCache.values());
+    }
+  }
 
   async disconnect(): Promise<void> {
     if (this.redis) {

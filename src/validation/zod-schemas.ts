@@ -54,6 +54,5 @@ export const createSubscriberWithSchemaSchema = z.object({
   includeSender: z.boolean(),
   description: z.string().optional(),
   parameters: z.array(eventParameterSchema).optional(),
-  validationSchema: z.record(z.string(), z.any()).optional(),
 });
 

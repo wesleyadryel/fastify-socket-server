@@ -7,7 +7,6 @@ import {
   createSubscriberWithSchemaSchema
 } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
-import { redisStorage } from '../storage/redis';
 
 async function authGuard(request: FastifyRequest, reply: FastifyReply) {  
   const authHeader = request.headers['authorization'];
@@ -144,6 +143,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
         description: 'Create subscriber with parameter validation schema',
         summary: 'Create Subscriber with Validation',
         tags: ['Event Subscribers'],
+        body: createSubscriberWithSchemaSchema,
         response: {
           200: {
             type: 'object',
@@ -179,7 +179,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       try {
-        const subscriber = subscriberService.createSubscriber(request.body as any);
+        const subscriber = subscriberService.createSubscriber(request.body);
         return {
           success: true,
           subscriber
@@ -305,7 +305,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { id } = request.params as { id: string };
-        const subscriber = subscriberService.getSubscriber(id);
+        const subscriber = subscriberService.getSubscriberById(id);
         
         if (!subscriber) {
           return reply.status(404).send({
@@ -343,6 +343,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
           },
           required: ['id']
         },
+        body: updateSubscriberSchema,
         response: {
           200: {
             type: 'object',
@@ -379,7 +380,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { id } = request.params as { id: string };
-        const subscriber = subscriberService.updateSubscriber(id, request.body as any);
+        const subscriber = subscriberService.updateSubscriber(id, request.body);
         
         if (!subscriber) {
           return reply.status(404).send({
@@ -542,7 +543,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { eventListener } = request.params as { eventListener: string };
-        const subscriber = subscriberService.findSubscriberByEventListener(eventListener);
+        const subscriber = subscriberService.getSubscriberByEventListener(eventListener);
         
         if (!subscriber) {
           return reply.status(404).send({
@@ -565,6 +566,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     }
   );
 
+  // Server emit route
   fastify.post('/server/emit', {
     preHandler: [authGuard],
     schema: {
@@ -612,13 +614,11 @@ export default async function subscriberApi(fastify: FastifyInstance) {
       if (emitToUser) {
         const targetUsers = await redisStorage.getUsersByIdentifiers(emitToUser);
         const targetSockets = targetUsers
-          .map((user: any) => io.sockets.sockets.get(user.socketId))
-          .filter((socket: any) => socket !== undefined);
+          .map(user => io.sockets.sockets.get(user.socketId))
+          .filter(socket => socket !== undefined);
 
         for (const socket of targetSockets) {
-          if (socket) {
-            socket.emit(eventName, data);
-          }
+          socket.emit(eventName, data);
         }
         clientsCount = targetSockets.length;
         targetInfo = `specific users (${Object.keys(emitToUser).join(', ')})`;
