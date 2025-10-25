@@ -6,11 +6,8 @@ export interface StorageConfig {
     password?: string;
     db: number;
   };
-  userKeyPrefix: string; // Prefixo para chaves de usuário
-  ttl: number; // TTL em segundos
-  heartbeatInterval: number; // Intervalo do heartbeat em ms
-  cleanupInterval: number; // Intervalo de limpeza em ms
-  maxInactiveTime: number; // Tempo máximo de inatividade em ms
+  userKeyPrefix: string;
+  ttl: number;
 }
 
 export const storageConfig: StorageConfig = {
@@ -22,10 +19,7 @@ export const storageConfig: StorageConfig = {
     db: parseInt(process.env.REDIS_DB || '0')
   },
   userKeyPrefix: process.env.USER_KEY_PREFIX || 'user',
-  ttl: parseInt(process.env.STORAGE_TTL || '3600'), // 1 hora por padrão
-  heartbeatInterval: parseInt(process.env.HEARTBEAT_INTERVAL || '300000'), // 5 minutos
-  cleanupInterval: parseInt(process.env.CLEANUP_INTERVAL || '600000'), // 10 minutos
-  maxInactiveTime: parseInt(process.env.MAX_INACTIVE_TIME || '1800000') // 30 minutos
+  ttl: 3600
 };
 
 export function getStorageInfo(): { type: string; config: Partial<StorageConfig> } {
@@ -34,10 +28,7 @@ export function getStorageInfo(): { type: string; config: Partial<StorageConfig>
     config: {
       useRedis: storageConfig.useRedis,
       userKeyPrefix: storageConfig.userKeyPrefix,
-      ttl: storageConfig.ttl,
-      heartbeatInterval: storageConfig.heartbeatInterval,
-      cleanupInterval: storageConfig.cleanupInterval,
-      maxInactiveTime: storageConfig.maxInactiveTime
+      ttl: storageConfig.ttl
     }
   };
 }

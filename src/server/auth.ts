@@ -3,7 +3,6 @@ import { ExtendedError } from 'socket.io/dist/namespace';
 import { jwtManager } from '../jwt';
 import { Log } from '../utils/log';
 import { redisStorage } from '../storage/redis';
-import { heartbeatManager } from '../storage/heartbeat';
 
 export interface SocketData {
   userId?: string;
@@ -56,10 +55,7 @@ export const authMiddleware = (
     );
     
     
-    heartbeatManager.startHeartbeat(token);
-    
     socket.on('disconnect', () => {
-      heartbeatManager.stopHeartbeat(token);
       redisStorage.removeUser(token);
     });
     

@@ -256,15 +256,6 @@ class RedisStorage {
     }
   }
 
-  async extendUserTTL(jwtToken: string): Promise<void> {
-    if (this.useRedis && this.redis) {
-      try {
-        await this.redis.expire(this.getJWTKey(jwtToken), this.ttl);
-      } catch (error) {
-        console.error('Redis extendTTL error:', error);
-      }
-    }
-  }
 
   async disconnect(): Promise<void> {
     if (this.redis) {

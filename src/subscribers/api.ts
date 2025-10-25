@@ -8,7 +8,6 @@ import {
 } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
 import { redisStorage } from '../storage/redis';
-import { healthMonitor } from '../storage/health';
 
 async function authGuard(request: FastifyRequest, reply: FastifyReply) {  
   const authHeader = request.headers['authorization'];
@@ -764,45 +763,5 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     }
   });
 
-  // Health check route
-  fastify.get('/storage/health', {
-    schema: {
-      summary: 'Get storage health status',
-      tags: ['Storage'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            health: {
-              type: 'object',
-              properties: {
-                isHealthy: { type: 'boolean' },
-                storageType: { type: 'string' },
-                totalUsers: { type: 'number' },
-                lastCheck: { type: 'string' },
-                errors: { type: 'array', items: { type: 'string' } }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const health = await healthMonitor.getCurrentHealth();
-      
-      return {
-        success: true,
-        health
-      };
-    } catch (error: any) {
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to get storage health',
-        details: error.message
-      });
-    }
-  });
 
 }

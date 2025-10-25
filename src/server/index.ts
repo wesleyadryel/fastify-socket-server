@@ -20,8 +20,6 @@ import { Server } from 'socket.io';
 import { 
   reconnectionManager, 
   redisStorage, 
-  cleanupManager, 
-  healthMonitor,
   initializeStorage,
   shutdownStorage 
 } from '../storage';
