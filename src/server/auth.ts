@@ -5,9 +5,8 @@ import { Log } from '../utils/log';
 import { redisStorage } from '../storage/redis';
 
 export interface SocketData {
-  userId?: string;
   authenticated?: boolean;
-  user?: {
+  identifiers?: {
     userId?: string;
     userSource?: string;
     [key: string]: any;
@@ -40,15 +39,13 @@ export const authMiddleware = (
       throw new Error('Invalid payload');
     }
     
-    socket.data.userId = payload.userId;
     socket.data.authenticated = true;
-    socket.data.user = payload.identifiers || { userId: payload.userId };
+    socket.data.identifiers = payload.identifiers || { userId: payload.userId };
     
     // Store user data in persistent storage using JWT as primary identifier
     redisStorage.updateUser(
       token,
       socket.id,
-      payload.userId,
       true,
       payload.identifiers || { userId: payload.userId },
       []

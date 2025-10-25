@@ -29,7 +29,6 @@ export default async function userApi(fastify: FastifyInstance) {
                   type: 'object',
                   properties: {
                     socketId: { type: 'string' },
-                    userId: { type: 'string', nullable: true },
                     authenticated: { type: 'boolean' },
                     identifiers: { 
                         type: 'object',
@@ -62,9 +61,8 @@ export default async function userApi(fastify: FastifyInstance) {
           
           clientsList.push({
             socketId: storedUser.socketId,
-            userId: storedUser.userId,
             authenticated: storedUser.authenticated,
-            identifiers: storedUser.user,
+            identifiers: storedUser.identifiers,
             connectedAt: storedUser.connectedAt,
             lastSeen: storedUser.lastSeen,
             rooms,
@@ -109,9 +107,8 @@ export default async function userApi(fastify: FastifyInstance) {
               type: 'object',
               properties: {
                 socketId: { type: 'string' },
-                userId: { type: 'string' },
                 authenticated: { type: 'boolean' },
-                user: { type: 'object' },
+                identifiers: { type: 'object' },
                 connectedAt: { type: 'string' },
                 lastSeen: { type: 'string' },
                 rooms: { type: 'array', items: { type: 'string' } }

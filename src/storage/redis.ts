@@ -4,9 +4,8 @@ import { storageConfig } from './config';
 
 export interface StoredUser {
   socketId: string;
-  userId: string;
   authenticated: boolean;
-  user: Record<string, any>;
+  identifiers: Record<string, any>;
   connectedAt: string;
   lastSeen: string;
   rooms: string[];
@@ -45,12 +44,11 @@ class RedisStorage {
     return `${storageConfig.userKeyPrefix}:${hash}`;
   }
 
-  async addUser(jwtToken: string, socketId: string, userId: string, authenticated: boolean, user: Record<string, any>, rooms: string[] = []): Promise<void> {
+  async addUser(jwtToken: string, socketId: string, authenticated: boolean, identifiers: Record<string, any>, rooms: string[] = []): Promise<void> {
     const userData: StoredUser = {
       socketId,
-      userId,
       authenticated,
-      user,
+      identifiers,
       connectedAt: new Date().toISOString(),
       lastSeen: new Date().toISOString(),
       rooms
@@ -59,35 +57,33 @@ class RedisStorage {
     if (this.useRedis && this.redis) {
       try {
         const key = this.getJWTKey(jwtToken);
-        const userJson = JSON.stringify(userData.user);
+        const identifiersJson = JSON.stringify(userData.identifiers);
         
         await this.redis.hset(key, {
           socketId: userData.socketId,
-          userId: userData.userId,
           authenticated: userData.authenticated.toString(),
-          user: userJson,
+          identifiers: identifiersJson,
           connectedAt: userData.connectedAt,
           lastSeen: userData.lastSeen,
           rooms: JSON.stringify(userData.rooms)
         });
         await this.redis.expire(key, this.ttl);
-        storageEvents.emitUserEvent('user_connected', socketId, userId, user);
+        storageEvents.emitUserEvent('user_connected', socketId, identifiers.userId || '', identifiers);
       } catch (error) {
         console.error('Redis storage error:', error);
         this.localCache.set(jwtToken, userData);
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      storageEvents.emitUserEvent('user_connected', socketId, userId, user);
+      storageEvents.emitUserEvent('user_connected', socketId, identifiers.userId || '', identifiers);
     }
   }
 
-  async updateUser(jwtToken: string, socketId: string, userId: string, authenticated: boolean, user: Record<string, any>, rooms: string[] = []): Promise<void> {
+  async updateUser(jwtToken: string, socketId: string, authenticated: boolean, identifiers: Record<string, any>, rooms: string[] = []): Promise<void> {
     const userData: StoredUser = {
       socketId,
-      userId,
       authenticated,
-      user,
+      identifiers,
       connectedAt: new Date().toISOString(),
       lastSeen: new Date().toISOString(),
       rooms
@@ -98,22 +94,21 @@ class RedisStorage {
         const key = this.getJWTKey(jwtToken);
         await this.redis.hset(key, {
           socketId: userData.socketId,
-          userId: userData.userId,
           authenticated: userData.authenticated.toString(),
-          user: JSON.stringify(userData.user),
+          identifiers: JSON.stringify(userData.identifiers),
           connectedAt: userData.connectedAt,
           lastSeen: userData.lastSeen,
           rooms: JSON.stringify(userData.rooms)
         });
         await this.redis.expire(key, this.ttl);
-        storageEvents.emitUserEvent('user_updated', socketId, userId, user);
+        storageEvents.emitUserEvent('user_updated', socketId, identifiers.userId || '', identifiers);
       } catch (error) {
         console.error('Redis update error:', error);
         this.localCache.set(jwtToken, userData);
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      storageEvents.emitUserEvent('user_updated', socketId, userId, user);
+      storageEvents.emitUserEvent('user_updated', socketId, identifiers.userId || '', identifiers);
     }
   }
 
@@ -125,7 +120,7 @@ class RedisStorage {
           await this.redis.del(this.getJWTKey(jwtToken));
         }
         if (userData) {
-          storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.userId, userData.user);
+          storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userId || '', userData.identifiers);
         }
       } catch (error) {
         console.error('Redis removal error:', error);
@@ -135,7 +130,7 @@ class RedisStorage {
       const userData = this.localCache.get(jwtToken);
       this.localCache.delete(jwtToken);
       if (userData) {
-        storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.userId, userData.user);
+        storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userId || '', userData.identifiers);
       }
     }
   }
@@ -146,13 +141,13 @@ class RedisStorage {
         const key = this.getJWTKey(jwtToken);
         const data = await this.redis.hgetall(key);
         if (data && Object.keys(data).length > 0) {
-          let userData = {};
+          let identifiersData = {};
           let roomsData = [];
           
           try {
-            userData = JSON.parse(data.user);
+            identifiersData = JSON.parse(data.identifiers);
           } catch (e) {
-            console.error('Error parsing user data:', data.user);
+            console.error('Error parsing identifiers data:', data.identifiers);
           }
           
           try {
@@ -163,9 +158,8 @@ class RedisStorage {
           
           return {
             socketId: data.socketId,
-            userId: data.userId,
             authenticated: data.authenticated === 'true',
-            user: userData,
+            identifiers: identifiersData,
             connectedAt: data.connectedAt,
             lastSeen: data.lastSeen,
             rooms: roomsData
@@ -195,13 +189,13 @@ class RedisStorage {
         for (const key of keys) {
           const data = await this.redis.hgetall(key);
           if (data && Object.keys(data).length > 0) {
-            let userData = {};
+            let identifiersData = {};
             let roomsData = [];
             
             try {
-              userData = JSON.parse(data.user);
+              identifiersData = JSON.parse(data.identifiers);
             } catch (e) {
-              console.error('Error parsing user data:', data.user);
+              console.error('Error parsing identifiers data:', data.identifiers);
             }
             
             try {
@@ -212,9 +206,8 @@ class RedisStorage {
             
             users.push({
               socketId: data.socketId,
-              userId: data.userId,
               authenticated: data.authenticated === 'true',
-              user: userData,
+              identifiers: identifiersData,
               connectedAt: data.connectedAt,
               lastSeen: data.lastSeen,
               rooms: roomsData
@@ -235,7 +228,7 @@ class RedisStorage {
 
   async getUsersByUserId(userId: string): Promise<StoredUser[]> {
     const allUsers = await this.getAllUsers();
-    return allUsers.filter(user => user.userId === userId);
+    return allUsers.filter(user => user.identifiers.userId === userId);
   }
 
   async getUsersByIdentifiers(identifiers: Record<string, any>): Promise<StoredUser[]> {
@@ -246,7 +239,7 @@ class RedisStorage {
       let match = true;
       for (const key in identifiers) {
         if (identifiers.hasOwnProperty(key)) {
-          if (user.user[`${key}`] !== identifiers[key]) {
+          if (user.identifiers[`${key}`] !== identifiers[key]) {
             match = false;
             break;
           }
@@ -299,14 +292,14 @@ class RedisStorage {
           const data = await this.redis.hgetall(key);
           
           if (data && Object.keys(data).length > 0) {
-            let userData = {};
+            let identifiersData = {};
             let roomsData = [];
             
-            if (data.user) {
+            if (data.identifiers) {
               try {
-                userData = JSON.parse(data.user);
+                identifiersData = JSON.parse(data.identifiers);
               } catch (e) {
-                console.error('Error parsing user data:', data.user, e);
+                console.error('Error parsing identifiers data:', data.identifiers, e);
               }
             }
             
@@ -320,9 +313,8 @@ class RedisStorage {
             
             const user = {
               socketId: data.socketId,
-              userId: data.userId,
               authenticated: data.authenticated === 'true',
-              user: userData,
+              identifiers: identifiersData,
               connectedAt: data.connectedAt,
               lastSeen: data.lastSeen,
               rooms: roomsData

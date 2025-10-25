@@ -15,16 +15,15 @@ class ReconnectionManager {
         return false;
       }
 
-      if (storedUser.userId !== userId) {
+      if (storedUser.identifiers.userId !== userId) {
         return false;
       }
 
       if (this.io) {
         const socket = this.io.sockets.sockets.get(socketId);
         if (socket) {
-          socket.data.userId = storedUser.userId;
           socket.data.authenticated = storedUser.authenticated;
-          socket.data.user = storedUser.user;
+          socket.data.identifiers = storedUser.identifiers;
 
           for (const room of storedUser.rooms) {
             socket.join(room);

@@ -12,7 +12,7 @@ export function handleSendMessage(socket: Socket) {
       if (parsed.roomId) {
         socket.to(parsed.roomId).emit('messageReceived', {
           ...parsed,
-          userId: socket.data.userId,
+          userId: socket.data.identifiers?.userId,
           timestamp: new Date().toISOString(),
         });
       }
@@ -33,7 +33,7 @@ export function handleJoinRoom(socket: Socket) {
       callback({ success: true, data: parsed });
       socket.join(parsed.roomId);
       socket.to(parsed.roomId).emit('userJoined', {
-        userId: socket.data.userId,
+        userId: socket.data.identifiers?.userId,
         roomId: parsed.roomId,
       });
     } catch (err) {
@@ -53,7 +53,7 @@ export function handleLeaveRoom(socket: Socket) {
       callback({ success: true, data: parsed });
       socket.leave(parsed.roomId);
       socket.to(parsed.roomId).emit('userLeft', {
-        userId: socket.data.userId,
+        userId: socket.data.identifiers?.userId,
         roomId: parsed.roomId,
       });
     } catch (err) {
@@ -107,7 +107,7 @@ export function handleDynamicEvents(socket: Socket) {
 
           const eventData = {
             ...sanitizedData,
-            userId: socket.data.userId,
+            userId: socket.data.identifiers?.userId,
             timestamp: new Date().toISOString(),
             subscriberId: subscriber.id
           };
