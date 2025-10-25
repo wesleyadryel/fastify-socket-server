@@ -23,7 +23,7 @@ export default async function userApi(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
-              clients: {
+              clientsList: {
                 type: 'array',
                 items: {
                   type: 'object',
@@ -31,7 +31,13 @@ export default async function userApi(fastify: FastifyInstance) {
                     socketId: { type: 'string' },
                     userId: { type: 'string', nullable: true },
                     authenticated: { type: 'boolean' },
-                    user: { type: 'object', nullable: true },
+                    identifiers: { 
+                        type: 'object',
+                        properties: {
+                            userId: { type: 'string', nullable: true },
+                            userSource: { type: 'string', nullable: true },
+                        }
+                    },
                     connectedAt: { type: 'string' },
                     rooms: { type: 'array', items: { type: 'string' } }
                   }
@@ -46,7 +52,7 @@ export default async function userApi(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const io = fastify.io;
-        const clients = [];
+        const clientsList = [];
         
         const storedUsers = await redisStorage.getUsersWithDetails();
         
@@ -54,22 +60,24 @@ export default async function userApi(fastify: FastifyInstance) {
           const socket = io.sockets.sockets.get(storedUser.socketId);
           const rooms = socket ? Array.from(socket.rooms).filter(room => room !== storedUser.socketId) : storedUser.rooms;
           
-          clients.push({
+          clientsList.push({
             socketId: storedUser.socketId,
             userId: storedUser.userId,
             authenticated: storedUser.authenticated,
-            user: storedUser.user,
+            identifiers: storedUser.user,
             connectedAt: storedUser.connectedAt,
             lastSeen: storedUser.lastSeen,
             rooms,
             isConnected: !!socket
           });
         }
+
+        console.log('clients', clientsList);
         
         return {
           success: true,
-          clients,
-          totalClients: clients.length
+          clientsList,
+          totalClients: clientsList.length
         };
       } catch (error: any) {
         return reply.status(500).send({
