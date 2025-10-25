@@ -2,6 +2,7 @@ import { Socket } from 'socket.io';
 import { ZodError } from 'zod';
 import { messageDataSchema, roomIdSchema } from '../validation/zod-schemas';
 import { subscriberService } from '../subscribers';
+import { EventDataValidator } from '../subscribers/validation';
 
 export function handleSendMessage(socket: Socket) {
   socket.on('sendMessage', (data: any, callback: (response: any) => void) => {
@@ -86,8 +87,25 @@ export function handleDynamicEvents(socket: Socket) {
         };
 
         if (subscriber.replicable && data.roomId) {
+          let sanitizedData = data;
+          
+          if (subscriber.parameters && subscriber.parameters.length > 0) {
+            try {
+              sanitizedData = EventDataValidator.validateAndSanitizeData(data, subscriber.parameters);
+            } catch (validationError: any) {
+              if (callback) {
+                callback({ 
+                  success: false, 
+                  error: `Validation failed: ${validationError.message}`,
+                  subscriberId: subscriber.id
+                });
+              }
+              return result;
+            }
+          }
+
           socket.to(data.roomId).emit(eventName, {
-            ...data,
+            ...sanitizedData,
             userId: socket.data.userId,
             timestamp: new Date().toISOString(),
             subscriberId: subscriber.id

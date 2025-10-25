@@ -1,10 +1,22 @@
 import { randomUUID } from 'crypto';
 
+export interface EventParameter {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  required: boolean;
+  sanitize: boolean;
+  maxLength?: number;
+  pattern?: string;
+  allowedValues?: any[];
+}
+
 export interface Subscriber {
   id: string;
   eventListener: string;
   replicable: boolean;
   description?: string;
+  parameters?: EventParameter[];
+  validationSchema?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }

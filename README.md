@@ -212,6 +212,47 @@ Content-Type: application/json
 }
 ```
 
+#### POST `/subscribers/with-validation`
+Creates a new event subscriber with parameter validation and sanitization for secure event handling.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "eventListener": "secureChat",
+  "replicable": true,
+  "description": "Secure chat with parameter validation",
+  "parameters": [
+    {
+      "name": "message",
+      "type": "string",
+      "required": true,
+      "sanitize": true,
+      "maxLength": 500,
+      "pattern": "^[a-zA-Z0-9\\s.,!?-]+$"
+    },
+    {
+      "name": "priority",
+      "type": "string",
+      "required": false,
+      "sanitize": true,
+      "allowedValues": ["low", "normal", "high"]
+    },
+    {
+      "name": "metadata",
+      "type": "object",
+      "required": false,
+      "sanitize": true
+    }
+  ]
+}
+```
+
 **Response (New subscriber):**
 ```json
 {
@@ -590,6 +631,30 @@ socket.on('customEvent', (data) => {
 ```
 
 **Security Note:** The `replicable` flag is a security setting that controls whether the backend should transmit events to other clients. Events with `replicable: false` will not be broadcast to other clients, providing a way to handle sensitive events securely.
+
+### Parameter Validation and Sanitization
+
+For secure event handling, you can define parameter validation rules that will:
+
+1. **Validate Input Types**: Ensure parameters match expected types
+2. **Sanitize Data**: Remove potentially harmful content (XSS, scripts, etc.)
+3. **Enforce Limits**: Set maximum lengths and allowed values
+4. **Pattern Matching**: Use regex patterns for validation
+5. **Required Fields**: Enforce mandatory parameters
+
+**Parameter Types:**
+- `string` - Text data with sanitization
+- `number` - Numeric values
+- `boolean` - True/false values
+- `object` - Structured data
+- `array` - Lists of values
+
+**Security Features:**
+- **XSS Protection**: Automatic script tag removal
+- **Length Limits**: Prevent oversized payloads
+- **Pattern Validation**: Regex-based input validation
+- **Value Restrictions**: Whitelist of allowed values
+- **Type Safety**: Strict type checking
 
 ## 📊 Monitoring
 

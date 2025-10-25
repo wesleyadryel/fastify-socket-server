@@ -3,7 +3,8 @@ import { subscriberService } from './index';
 import { 
   createSubscriberSchema, 
   updateSubscriberSchema, 
-  deleteSubscriberSchema 
+  deleteSubscriberSchema,
+  createSubscriberWithSchemaSchema
 } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
 
@@ -74,6 +75,79 @@ export default async function subscriberApi(fastify: FastifyInstance) {
       return {
         ...subscriber,
         message: 'Subscriber created successfully',
+        wasUpdated: false
+      };
+    }
+  );
+
+  fastify.post(
+    '/subscribers/with-validation',
+    {
+      preHandler: [authGuard, fastifyZodPreHandler(createSubscriberWithSchemaSchema)],
+      schema: {
+        description: 'Create a new event subscriber with parameter validation.',
+        tags: ['Subscribers'],
+        body: {
+          type: 'object',
+          properties: {
+            eventListener: { type: 'string', description: 'Event listener name' },
+            replicable: { type: 'boolean', description: 'Whether the event should be replicated to other clients', default: true },
+            description: { type: 'string', description: 'Optional description' },
+            parameters: {
+              type: 'array',
+              description: 'Parameter validation rules',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  type: { type: 'string', enum: ['string', 'number', 'boolean', 'object', 'array'] },
+                  required: { type: 'boolean', default: false },
+                  sanitize: { type: 'boolean', default: true },
+                  maxLength: { type: 'number' },
+                  pattern: { type: 'string' },
+                  allowedValues: { type: 'array' }
+                },
+                required: ['name', 'type']
+              }
+            }
+          },
+          required: ['eventListener']
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              eventListener: { type: 'string' },
+              replicable: { type: 'boolean' },
+              description: { type: 'string', nullable: true },
+              parameters: { type: 'array', nullable: true },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' },
+              message: { type: 'string' },
+              wasUpdated: { type: 'boolean' }
+            }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      const { eventListener } = request.body as any;
+      
+      const existingSubscriber = subscriberService.findSubscriberByEventListener(eventListener);
+      const subscriber = subscriberService.createSubscriber(request.body as any);
+      
+      if (existingSubscriber) {
+        return {
+          ...subscriber,
+          message: 'Subscriber updated (replaced existing subscriber with same eventListener)',
+          wasUpdated: true
+        };
+      }
+      
+      return {
+        ...subscriber,
+        message: 'Subscriber created successfully with parameter validation',
         wasUpdated: false
       };
     }
