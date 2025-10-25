@@ -36,7 +36,7 @@ export const authMiddleware = (
 
   try {
     const payload = jwtManager.verify(token);
-    console.log('JWT payload received:', JSON.stringify(payload, null, 2));
+    // JWT payload received
     
     if (!payload || typeof payload !== 'object' || !payload.userId) {
       throw new Error('Invalid payload');
@@ -56,12 +56,7 @@ export const authMiddleware = (
       []
     );
     
-    console.log('User authenticated successfully', {
-      socketId: socket.id,
-      userId: payload.userId,
-      identifiers: payload.identifiers,
-      userData: socket.data.user
-    });
+    // User authenticated successfully
     
     // Start heartbeat for this user using JWT
     heartbeatManager.startHeartbeat(token);
@@ -70,7 +65,7 @@ export const authMiddleware = (
     socket.on('disconnect', () => {
       heartbeatManager.stopHeartbeat(token);
       redisStorage.removeUser(token);
-      console.log('User disconnected and removed from storage:', token);
+      // User disconnected and removed from storage
     });
     
     next();

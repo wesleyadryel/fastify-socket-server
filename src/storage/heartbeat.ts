@@ -13,14 +13,14 @@ class HeartbeatManager {
     const interval = setInterval(async () => {
       try {
         await redisStorage.extendUserTTL(jwtToken);
-        console.log(`Heartbeat extended for JWT token`);
+        // Heartbeat extended
       } catch (error) {
         console.error(`Heartbeat error for JWT token:`, error);
       }
     }, this.heartbeatInterval);
     
     this.intervals.set(jwtToken, interval);
-    console.log(`Heartbeat started for JWT token`);
+    // Heartbeat started
   }
 
   stopHeartbeat(jwtToken: string): void {
@@ -28,7 +28,7 @@ class HeartbeatManager {
     if (interval) {
       clearInterval(interval);
       this.intervals.delete(jwtToken);
-      console.log(`Heartbeat stopped for JWT token`);
+      // Heartbeat stopped
     }
   }
 
@@ -37,7 +37,7 @@ class HeartbeatManager {
       clearInterval(interval);
     }
     this.intervals.clear();
-    console.log('All heartbeats stopped');
+    // All heartbeats stopped
   }
 }
 

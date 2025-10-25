@@ -36,10 +36,10 @@ class RedisStorage {
       });
 
       this.redis.on('connect', () => {
-        console.log('Connected to Redis');
+        // Connected to Redis
       });
     } else {
-      console.log('Using local cache storage');
+      // Using local cache storage
     }
   }
 
@@ -47,7 +47,7 @@ class RedisStorage {
     // Usar hash do JWT para evitar caracteres especiais na chave
     const crypto = require('crypto');
     const hash = crypto.createHash('sha256').update(jwtToken).digest('hex');
-    return `user:${hash}`;
+    return `${storageConfig.userKeyPrefix}:${hash}`;
   }
 
   async addUser(jwtToken: string, socketId: string, userId: string, authenticated: boolean, user: Record<string, any>, rooms: string[] = []): Promise<void> {
@@ -63,9 +63,19 @@ class RedisStorage {
 
     if (this.useRedis && this.redis) {
       try {
-        // Armazenar apenas por JWT (chave única)
-        await this.redis.setex(this.getJWTKey(jwtToken), this.ttl, JSON.stringify(userData));
-        console.log(`User ${userId} stored in Redis with JWT token`);
+        // Armazenar como hashmap no Redis
+        const key = this.getJWTKey(jwtToken);
+        await this.redis.hset(key, {
+          socketId: userData.socketId,
+          userId: userData.userId,
+          authenticated: userData.authenticated.toString(),
+          user: JSON.stringify(userData.user),
+          connectedAt: userData.connectedAt,
+          lastSeen: userData.lastSeen,
+          rooms: JSON.stringify(userData.rooms)
+        });
+        await this.redis.expire(key, this.ttl);
+        // User stored in Redis
         storageEvents.emitUserEvent('user_connected', socketId, userId, user);
       } catch (error) {
         console.error('Redis storage error:', error);
@@ -73,7 +83,7 @@ class RedisStorage {
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      console.log(`User ${userId} stored in local cache with JWT token`);
+      // User stored in local cache
       storageEvents.emitUserEvent('user_connected', socketId, userId, user);
     }
   }
@@ -91,8 +101,19 @@ class RedisStorage {
 
     if (this.useRedis && this.redis) {
       try {
-        await this.redis.setex(this.getJWTKey(jwtToken), this.ttl, JSON.stringify(userData));
-        console.log(`User ${userId} updated in Redis with JWT token`);
+        // Atualizar como hashmap no Redis
+        const key = this.getJWTKey(jwtToken);
+        await this.redis.hset(key, {
+          socketId: userData.socketId,
+          userId: userData.userId,
+          authenticated: userData.authenticated.toString(),
+          user: JSON.stringify(userData.user),
+          connectedAt: userData.connectedAt,
+          lastSeen: userData.lastSeen,
+          rooms: JSON.stringify(userData.rooms)
+        });
+        await this.redis.expire(key, this.ttl);
+        // User updated in Redis
         storageEvents.emitUserEvent('user_updated', socketId, userId, user);
       } catch (error) {
         console.error('Redis update error:', error);
@@ -100,7 +121,7 @@ class RedisStorage {
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      console.log(`User ${userId} updated in local cache with JWT token`);
+      // User updated in local cache
       storageEvents.emitUserEvent('user_updated', socketId, userId, user);
     }
   }
@@ -112,7 +133,7 @@ class RedisStorage {
         if (userData) {
           await this.redis.del(this.getJWTKey(jwtToken));
         }
-        console.log(`User with JWT token removed from Redis`);
+        // User removed from Redis
         if (userData) {
           storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.userId, userData.user);
         }
@@ -123,7 +144,7 @@ class RedisStorage {
     } else {
       const userData = this.localCache.get(jwtToken);
       this.localCache.delete(jwtToken);
-      console.log(`User with JWT token removed from local cache`);
+      // User removed from local cache
       if (userData) {
         storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.userId, userData.user);
       }
@@ -133,9 +154,18 @@ class RedisStorage {
   async getUserByJWT(jwtToken: string): Promise<StoredUser | undefined> {
     if (this.useRedis && this.redis) {
       try {
-        const data = await this.redis.get(this.getJWTKey(jwtToken));
-        if (data) {
-          return JSON.parse(data);
+        const key = this.getJWTKey(jwtToken);
+        const data = await this.redis.hgetall(key);
+        if (data && Object.keys(data).length > 0) {
+          return {
+            socketId: data.socketId,
+            userId: data.userId,
+            authenticated: data.authenticated === 'true',
+            user: JSON.parse(data.user),
+            connectedAt: data.connectedAt,
+            lastSeen: data.lastSeen,
+            rooms: JSON.parse(data.rooms)
+          };
         }
         return undefined;
       } catch (error) {
@@ -156,17 +186,25 @@ class RedisStorage {
   async getAllUsers(): Promise<StoredUser[]> {
     if (this.useRedis && this.redis) {
       try {
-        const keys = await this.redis.keys('user:*');
+        const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
         const users: StoredUser[] = [];
         
         for (const key of keys) {
-          const data = await this.redis.get(key);
-          if (data) {
-            users.push(JSON.parse(data));
+          const data = await this.redis.hgetall(key);
+          if (data && Object.keys(data).length > 0) {
+            users.push({
+              socketId: data.socketId,
+              userId: data.userId,
+              authenticated: data.authenticated === 'true',
+              user: JSON.parse(data.user),
+              connectedAt: data.connectedAt,
+              lastSeen: data.lastSeen,
+              rooms: JSON.parse(data.rooms)
+            });
           }
         }
         
-        console.log(`Retrieved ${users.length} users from Redis`);
+        // Retrieved users from Redis
         return users;
       } catch (error) {
         console.error('Redis getAllUsers error:', error);
@@ -174,7 +212,7 @@ class RedisStorage {
       }
     } else {
       const users = Array.from(this.localCache.values());
-      console.log(`Retrieved ${users.length} users from local cache`);
+      // Retrieved users from local cache
       return users;
     }
   }
@@ -219,7 +257,12 @@ class RedisStorage {
       
       if (this.useRedis && this.redis) {
         try {
-          await this.redis.setex(this.getJWTKey(jwtToken), this.ttl, JSON.stringify(user));
+          const key = this.getJWTKey(jwtToken);
+          await this.redis.hset(key, {
+            rooms: JSON.stringify(rooms),
+            lastSeen: user.lastSeen
+          });
+          await this.redis.expire(key, this.ttl);
         } catch (error) {
           console.error('Redis updateUserRooms error:', error);
           this.localCache.set(jwtToken, user);

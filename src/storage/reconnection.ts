@@ -13,13 +13,13 @@ class ReconnectionManager {
       // Check if user exists in storage by JWT
       const storedUser = await redisStorage.getUserByJWT(jwtToken);
       if (!storedUser) {
-        console.log(`No stored user found for JWT token`);
+        // No stored user found
         return false;
       }
 
       // Verify user ID matches
       if (storedUser.userId !== userId) {
-        console.log(`User ID mismatch for JWT token: expected ${userId}, found ${storedUser.userId}`);
+        // User ID mismatch
         return false;
       }
 
@@ -36,7 +36,7 @@ class ReconnectionManager {
             socket.join(room);
           }
 
-          console.log(`User ${userId} reconnected and restored to rooms: ${storedUser.rooms.join(', ')}`);
+          // User reconnected and restored to rooms
           return true;
         }
       }

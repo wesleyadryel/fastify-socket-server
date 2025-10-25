@@ -21,7 +21,7 @@ class StorageEventEmitter extends EventEmitter {
     this.emit('user_event', event);
     this.emit(type, event);
     
-    console.log(`Storage event emitted: ${type} for user ${userId} (socketId: ${socketId})`);
+    // Storage event emitted
   }
 
   onUserEvent(callback: (event: UserEvent) => void): void {

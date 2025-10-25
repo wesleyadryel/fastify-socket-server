@@ -16,28 +16,27 @@ import { getStorageInfo } from './config';
 
 // Initialize storage system
 export async function initializeStorage(): Promise<void> {
-  console.log('🚀 Initializing storage system...');
+  // Initializing storage system
   
   const info = getStorageInfo();
-  console.log(`📦 Storage type: ${info.type}`);
-  console.log(`⚙️  Configuration:`, info.config);
+  // Storage type and configuration
   
   // Start all managers
   heartbeatManager.startHeartbeat('system-init');
   cleanupManager.startCleanup();
   healthMonitor.startMonitoring();
   
-  console.log('✅ Storage system initialized successfully');
+  // Storage system initialized successfully
 }
 
 // Graceful shutdown
 export async function shutdownStorage(): Promise<void> {
-  console.log('🛑 Shutting down storage system...');
+  // Shutting down storage system
   
   heartbeatManager.stopAllHeartbeats();
   cleanupManager.stopCleanup();
   healthMonitor.stopMonitoring();
   await redisStorage.disconnect();
   
-  console.log('✅ Storage system shutdown complete');
+  // Storage system shutdown complete
 }

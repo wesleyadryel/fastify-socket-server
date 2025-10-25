@@ -27,14 +27,14 @@ class HealthMonitor {
       }
     }, this.checkIntervalMs);
 
-    console.log('Health monitoring started');
+    // Health monitoring started
   }
 
   stopMonitoring(): void {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
-      console.log('Health monitoring stopped');
+      // Health monitoring stopped
     }
   }
 
@@ -49,7 +49,7 @@ class HealthMonitor {
       };
 
       this.lastHealthCheck = health;
-      console.log(`Health check: ${health.storageType} storage with ${health.totalUsers} users`);
+      // Health check completed
     } catch (error) {
       const health: StorageHealth = {
         isHealthy: false,
