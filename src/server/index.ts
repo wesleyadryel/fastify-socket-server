@@ -43,6 +43,21 @@ app.register(errorHandlerPlugin);
 
 app.ready((err) => {
   if (err) throw err;
+  
+  if (process.env.NODE_ENV === 'development') {
+    const { subscriberService } = require('../subscribers');
+    try {
+      subscriberService.createSubscriber({
+        eventListener: 'TEST-EVENT',
+        replicable: true,
+        includeSender: true,
+        description: 'Default test subscriber'
+      });
+    } catch (error: any) {
+
+    }
+  }
+  
   app.io.on('connection', (socket: any) => {
     console.info('Socket connected!', socket.id);
     registerSocketHandlers(socket);

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+            width: 150px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Socket.IO Test</h1>
+        
+        <div id="status" class="status disconnected">
+            ❌ Disconnected
+        </div>
+        
+        <div class="section">
+            <h3>🔌 Connection</h3>
+            <input type="text" id="serverUrl" placeholder="Server URL" value="http://localhost:3000">
+            <input type="text" id="token" placeholder="JWT Token" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE3MzQ5NzI4MDB9.test">
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()">Disconnect</button>
+            <button onclick="testConnection()">Test Connection</button>
+        </div>
+        
+        <div class="section">
+            <h3>📤 Emit Event</h3>
+            <input type="text" id="eventName" placeholder="Event name" value="TEST-EVENT">
+            <input type="text" id="message" placeholder="Message" value="Hello World!">
+            <button onclick="emitEvent()">Emit</button>
+        </div>
+        
+        <div class="section">
+            <h3>👂 Listen to Events</h3>
+            <button onclick="listenTo('testeeeeee')">Listen to testeeeeee</button>
+            <button onclick="listenTo('TEST-EVENT')">Listen to TEST-EVENT</button>
+            <button onclick="listenTo('*')">Listen to All</button>
+            <p><small>💡 With includeSender=true, the client that emits also receives the replicated event</small></p>
+        </div>
+        
+        <div class="section">
+            <h3>📋 Logs</h3>
+            <button onclick="clearLogs()">Clear</button>
+            <div id="logs" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let isListening = false;
+        
+        function log(message) {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logs.textContent += `[${timestamp}] ${message}\n`;
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        function updateStatus(connected) {
+            const status = document.getElementById('status');
+            if (connected) {
+                status.className = 'status connected';
+                status.textContent = '✅ Connected';
+            } else {
+                status.className = 'status disconnected';
+                status.textContent = '❌ Disconnected';
+            }
+        }
+        
+        function connect() {
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            const serverUrl = document.getElementById('serverUrl').value;
+            const token = document.getElementById('token').value;
+            const auth = token ? { token } : {};
+            
+            log(`🔌 Connecting to: ${serverUrl}`);
+            socket = io(serverUrl, { 
+                auth,
+                transports: ['websocket', 'polling'],
+                timeout: 5000
+            });
+            
+            socket.on('connect', () => {
+                log('✅ Connected!');
+                updateStatus(true);
+            });
+            
+            socket.on('disconnect', () => {
+                log('❌ Disconnected');
+                updateStatus(false);
+            });
+            
+            socket.on('connect_error', (error) => {
+                log(`❌ Connection error: ${error.message}`);
+                log(`❌ Type: ${error.type}`);
+                log(`❌ Description: ${error.description}`);
+                updateStatus(false);
+            });
+        }
+        
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                updateStatus(false);
+                log('🔌 Manually disconnected');
+            }
+        }
+        
+        function emitEvent() {
+            if (!socket || !socket.connected) {
+                log('❌ Not connected!');
+                return;
+            }
+            
+            const eventName = document.getElementById('eventName').value;
+            const message = document.getElementById('message').value;
+            
+            const data = {
+                message: message,
+                timestamp: new Date().toISOString()
+            };
+            
+            log(`📤 Emitting: ${eventName}`);
+            socket.emit(eventName, data, (response) => {
+                log(`📨 Response: ${JSON.stringify(response)}`);
+            });
+        }
+        
+        function listenTo(eventName) {
+            if (!socket || !socket.connected) {
+                log('❌ Not connected!');
+                return;
+            }
+            
+            if (eventName === '*') {
+                socket.onAny((eventName, data) => {
+                    log(`🎉 Event: ${eventName}`);
+                    log(`   Data: ${JSON.stringify(data)}`);
+                });
+                log('👂 Listening to all events');
+            } else {
+                socket.on(eventName, (data) => {
+                    log(`🎉 ${eventName}: ${JSON.stringify(data)}`);
+                });
+                log(`👂 Listening to: ${eventName}`);
+            }
+        }
+        
+        function testConnection() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            log(`🧪 Testing connection to: ${serverUrl}`);
+            
+            // Simple fetch test to verify if server is responding
+            fetch(serverUrl)
+                .then(response => {
+                    log(`✅ Server responding: ${response.status}`);
+                    if (response.status === 200) {
+                        log('✅ HTTP server is working');
+                    }
+                })
+                .catch(error => {
+                    log(`❌ Connection error: ${error.message}`);
+                    log('💡 Check if server is running (pnpm run dev)');
+                });
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').textContent = '';
+        }
+        
+        // Auto connect
+        window.onload = () => {
+            log('🚀 Page loaded');
+            log('💡 Click "Test Connection" first to verify if server is running');
+        };
+    </script>
+</body>
+</html>

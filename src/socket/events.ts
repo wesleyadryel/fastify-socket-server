@@ -78,6 +78,7 @@ export function handleDynamicEvents(socket: Socket) {
         return;
       }
 
+
       const results = subscribers.map(subscriber => {
         const result = {
           subscriberId: subscriber.id,
@@ -86,7 +87,7 @@ export function handleDynamicEvents(socket: Socket) {
           processed: true
         };
 
-        if (subscriber.replicable && data.roomId) {
+        if (subscriber.replicable) {
           let sanitizedData = data;
           
           if (subscriber.parameters && subscriber.parameters.length > 0) {
@@ -104,12 +105,24 @@ export function handleDynamicEvents(socket: Socket) {
             }
           }
 
-          socket.to(data.roomId).emit(eventName, {
+          const eventData = {
             ...sanitizedData,
             userId: socket.data.userId,
             timestamp: new Date().toISOString(),
             subscriberId: subscriber.id
-          });
+          };
+
+          if (data.roomId) {
+            if (subscriber.includeSender) {
+              socket.emit(eventName, eventData); // to sender
+            }
+            socket.to(data.roomId).emit(eventName, eventData);
+          } else {
+            if (subscriber.includeSender) {
+              socket.emit(eventName, eventData); // to sender
+            }
+            socket.broadcast.emit(eventName, eventData); // to others
+          }
         }
 
         return result;
@@ -119,8 +132,7 @@ export function handleDynamicEvents(socket: Socket) {
         callback({ 
           success: true, 
           data: { 
-            event: eventName, 
-            subscribers: results,
+            event: eventName,
             originalData: data
           } 
         });

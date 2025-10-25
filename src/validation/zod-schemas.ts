@@ -22,6 +22,7 @@ export const messageDataSchema = z.object({
 export const createSubscriberSchema = z.object({
   eventListener: z.string().min(1, 'eventListener is required'),
   replicable: z.boolean().default(true),
+  includeSender: z.boolean().default(false),
   description: z.string().optional(),
 });
 
@@ -29,6 +30,7 @@ export const updateSubscriberSchema = z.object({
   id: z.string().min(1, 'id is required'),
   eventListener: z.string().min(1, 'eventListener is required').optional(),
   replicable: z.boolean().optional(),
+  includeSender: z.boolean().optional(),
   description: z.string().optional(),
 });
 
@@ -49,6 +51,7 @@ export const eventParameterSchema = z.object({
 export const createSubscriberWithSchemaSchema = z.object({
   eventListener: z.string().min(1, 'eventListener is required'),
   replicable: z.boolean().default(true),
+  includeSender: z.boolean().default(false),
   description: z.string().optional(),
   parameters: z.array(eventParameterSchema).optional(),
   validationSchema: z.record(z.string(), z.any()).optional(),

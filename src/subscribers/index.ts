@@ -14,6 +14,7 @@ export interface Subscriber {
   id: string;
   eventListener: string;
   replicable: boolean;
+  includeSender: boolean;
   description?: string;
   parameters?: EventParameter[];
   validationSchema?: Record<string, any>;
@@ -105,6 +106,7 @@ class SubscriberService {
 
   getSubscribersByEvent(eventListener: string): Subscriber[] {
     const subscriberIds = this.manager.eventHandlers.get(eventListener);
+    
     if (!subscriberIds) {
       return [];
     }

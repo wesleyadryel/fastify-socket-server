@@ -14,8 +14,18 @@ const fastifySocketIO: FastifyPluginAsync<FastifySocketioOptions> = fp(
       done();
     };
 
-    const io = new Server(fastify.server, options);
-    io.use(authMiddleware);
+    const io = new Server(fastify.server, {
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
+      },
+      transports: ['websocket', 'polling'],
+      ...options
+    });
+    if (process.env.NODE_ENV !== 'development') {
+      io.use(authMiddleware);
+    }
     fastify.decorate('io', io);
 
     fastify.addHook('preClose', (done) => {

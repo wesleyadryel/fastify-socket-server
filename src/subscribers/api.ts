@@ -8,7 +8,7 @@ import {
 } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
 
-async function authGuard(request: FastifyRequest, reply: FastifyReply) {
+async function authGuard(request: FastifyRequest, reply: FastifyReply) {  
   const authHeader = request.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return reply.status(401).send({ error: 'Token not provided' });
@@ -28,55 +28,141 @@ export default async function subscriberApi(fastify: FastifyInstance) {
   fastify.post(
     '/subscribers',
     {
-      preHandler: [authGuard, fastifyZodPreHandler(createSubscriberSchema)],
+      preHandler: [authGuard],
       schema: {
-        description: 'Create a new event subscriber.',
+        description: 'Create one or multiple event subscribers.',
         tags: ['Subscribers'],
         body: {
-          type: 'object',
-          properties: {
-            eventListener: { type: 'string', description: 'Event listener name' },
-            replicable: { type: 'boolean', description: 'Whether the event should be replicated to other clients', default: true },
-            description: { type: 'string', description: 'Optional description' }
-          },
-          required: ['eventListener']
+          oneOf: [
+            {
+              type: 'object',
+              properties: {
+                eventListener: { type: 'string', description: 'Event listener name' },
+                replicable: { type: 'boolean', description: 'Whether the event should be replicated to other clients' },
+                includeSender: { type: 'boolean', description: 'Whether the sender should also receive the replicated event' },
+                description: { type: 'string', description: 'Optional description' }
+              },
+              required: ['eventListener']
+            },
+            {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  eventListener: { type: 'string', description: 'Event listener name' },
+                  replicable: { type: 'boolean', description: 'Whether the event should be replicated to other clients' },
+                  includeSender: { type: 'boolean', description: 'Whether the sender should also receive the replicated event' },
+                  description: { type: 'string', description: 'Optional description' }
+                },
+                required: ['eventListener']
+              }
+            }
+          ]
         },
         response: {
           200: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              eventListener: { type: 'string' },
-              replicable: { type: 'boolean' },
-              description: { type: 'string', nullable: true },
-              createdAt: { type: 'string', format: 'date-time' },
-              updatedAt: { type: 'string', format: 'date-time' },
-              message: { type: 'string' },
-              wasUpdated: { type: 'boolean' }
-            }
+            oneOf: [
+              {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  eventListener: { type: 'string' },
+                  replicable: { type: 'boolean' },
+                  includeSender: { type: 'boolean' },
+                  description: { type: 'string', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+                  message: { type: 'string' },
+                  wasUpdated: { type: 'boolean' }
+                }
+              },
+              {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    eventListener: { type: 'string' },
+                    replicable: { type: 'boolean' },
+                    includeSender: { type: 'boolean' },
+                    description: { type: 'string', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' },
+                    message: { type: 'string' },
+                    wasUpdated: { type: 'boolean' }
+                  }
+                }
+              }
+            ]
           }
         }
       }
     },
     async (request, reply) => {
-      const { eventListener } = request.body as any;
+      const body = request.body as any;
       
-      const existingSubscriber = subscriberService.findSubscriberByEventListener(eventListener);
-      const subscriber = subscriberService.createSubscriber(request.body as any);
-      
-      if (existingSubscriber) {
+      // Check if body is an array
+      if (Array.isArray(body)) {
+        const results = [];
+        const errors = [];
+        
+        for (const subscriberData of body) {
+          try {
+            // Validate each subscriber data
+            const validatedData = createSubscriberSchema.parse(subscriberData);
+            
+            const existingSubscriber = subscriberService.findSubscriberByEventListener(validatedData.eventListener);
+            const subscriber = subscriberService.createSubscriber(validatedData);
+            
+            results.push({
+              ...subscriber,
+              message: existingSubscriber ? 'Subscriber updated (replaced existing subscriber with same eventListener)' : 'Subscriber created successfully',
+              wasUpdated: !!existingSubscriber
+            });
+          } catch (error: any) {
+            errors.push({
+              eventListener: subscriberData.eventListener || 'unknown',
+              error: error.message
+            });
+          }
+        }
+        
+        if (errors.length > 0) {
+          return reply.status(400).send({
+            message: 'Some subscribers failed to create/update',
+            results,
+            errors
+          });
+        }
+        
+        return {
+          message: `${results.length} subscribers processed successfully`,
+          results,
+          totalCreated: results.filter(r => !r.wasUpdated).length,
+          totalUpdated: results.filter(r => r.wasUpdated).length
+        };
+      } else {
+        // Single subscriber (original behavior)
+        const validatedData = createSubscriberSchema.parse(body);
+        const { eventListener } = validatedData;
+        
+        const existingSubscriber = subscriberService.findSubscriberByEventListener(eventListener);
+        const subscriber = subscriberService.createSubscriber(validatedData);
+        
+        if (existingSubscriber) {
+          return {
+            ...subscriber,
+            message: 'Subscriber updated (replaced existing subscriber with same eventListener)',
+            wasUpdated: true
+          };
+        }
+        
         return {
           ...subscriber,
-          message: 'Subscriber updated (replaced existing subscriber with same eventListener)',
-          wasUpdated: true
+          message: 'Subscriber created successfully',
+          wasUpdated: false
         };
       }
-      
-      return {
-        ...subscriber,
-        message: 'Subscriber created successfully',
-        wasUpdated: false
-      };
     }
   );
 
@@ -120,6 +206,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
               id: { type: 'string' },
               eventListener: { type: 'string' },
               replicable: { type: 'boolean' },
+              includeSender: { type: 'boolean' },
               description: { type: 'string', nullable: true },
               parameters: { type: 'array', nullable: true },
               createdAt: { type: 'string', format: 'date-time' },
@@ -169,6 +256,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
                 id: { type: 'string' },
                 eventListener: { type: 'string' },
                 replicable: { type: 'boolean' },
+                includeSender: { type: 'boolean' },
                 description: { type: 'string', nullable: true },
                 createdAt: { type: 'string', format: 'date-time' },
                 updatedAt: { type: 'string', format: 'date-time' }
@@ -205,6 +293,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
               id: { type: 'string' },
               eventListener: { type: 'string' },
               replicable: { type: 'boolean' },
+              includeSender: { type: 'boolean' },
               description: { type: 'string', nullable: true },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' }
@@ -260,6 +349,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
               id: { type: 'string' },
               eventListener: { type: 'string' },
               replicable: { type: 'boolean' },
+              includeSender: { type: 'boolean' },
               description: { type: 'string', nullable: true },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' }
@@ -354,6 +444,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
                 id: { type: 'string' },
                 eventListener: { type: 'string' },
                 replicable: { type: 'boolean' },
+                includeSender: { type: 'boolean' },
                 description: { type: 'string', nullable: true },
                 createdAt: { type: 'string', format: 'date-time' },
                 updatedAt: { type: 'string', format: 'date-time' }
