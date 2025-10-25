@@ -177,7 +177,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             eventListener: { type: 'string', description: 'Event listener name' },
-            replicable: { type: 'boolean', description: 'Whether the event should be replicated to other clients', default: true },
+            replicable: { type: 'boolean', description: 'Whether the event should be replicated to other clients' },
             description: { type: 'string', description: 'Optional description' },
             parameters: {
               type: 'array',
@@ -187,8 +187,8 @@ export default async function subscriberApi(fastify: FastifyInstance) {
                 properties: {
                   name: { type: 'string' },
                   type: { type: 'string', enum: ['string', 'number', 'boolean', 'object', 'array'] },
-                  required: { type: 'boolean', default: false },
-                  sanitize: { type: 'boolean', default: true },
+                  required: { type: 'boolean' },
+                  sanitize: { type: 'boolean' },
                   maxLength: { type: 'number' },
                   pattern: { type: 'string' },
                   allowedValues: { type: 'array' }

@@ -31,13 +31,13 @@ const app = fastify({
 app.register(cors, { origin: true });
 app.register(helmet, { contentSecurityPolicy: false });
 app.register(rateLimitPlugin);
+app.register(swaggerPlugin);
 app.register(socketioServer);
 app.register(jwtApi);
 app.register(subscriberApi);
 app.register(underPressurePlugin);
 app.register(localRequestsPlugin);
 app.register(metricsPluginCustom);
-app.register(swaggerPlugin);
 app.register(errorHandlerPlugin);
 
 
