@@ -29,8 +29,9 @@ export default async function jwtApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard, fastifyZodPreHandler(createJwtSchema)],
       schema: {
-        description: 'Create a JWT token for a user.',
-        tags: ['JWT'],
+        description: 'Create a JWT token for a user',
+        summary: 'Create JWT Token',
+        tags: ['JWT Authentication'],
         body: {
           type: 'object',
           properties: {
@@ -61,8 +62,9 @@ export default async function jwtApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard, fastifyZodPreHandler(verifyJwtSchema)],
       schema: {
-        description: 'Decode a JWT token and return its payload.',
-        tags: ['JWT'],
+        description: 'Decode a JWT token and return its payload',
+        summary: 'Decode JWT Token',
+        tags: ['JWT Authentication'],
         body: {
           type: 'object',
           properties: {
@@ -93,8 +95,9 @@ export default async function jwtApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard, fastifyZodPreHandler(verifyJwtSchema)],
       schema: {
-        description: 'Verify a JWT token and return its validity and payload.',
-        tags: ['JWT'],
+        description: 'Verify a JWT token and return its validity and payload',
+        summary: 'Verify JWT Token',
+        tags: ['JWT Authentication'],
         body: {
           type: 'object',
           properties: {

@@ -30,8 +30,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard],
       schema: {
-        description: 'Create one or multiple event subscribers.',
-        tags: ['Subscribers'],
+        description: 'Create one or multiple event subscribers',
+        summary: 'Create Subscribers',
+        tags: ['Event Subscribers'],
         body: {
           oneOf: [
             {
@@ -171,8 +172,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard, fastifyZodPreHandler(createSubscriberWithSchemaSchema)],
       schema: {
-        description: 'Create a new event subscriber with parameter validation.',
-        tags: ['Subscribers'],
+        description: 'Create a new event subscriber with parameter validation',
+        summary: 'Create Subscriber with Validation',
+        tags: ['Event Subscribers'],
         body: {
           type: 'object',
           properties: {
@@ -245,8 +247,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard],
       schema: {
-        description: 'Get all event subscribers.',
-        tags: ['Subscribers'],
+        description: 'Get all event subscribers',
+        summary: 'List All Subscribers',
+        tags: ['Event Subscribers'],
         response: {
           200: {
             type: 'array',
@@ -277,8 +280,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard],
       schema: {
-        description: 'Get a specific subscriber by ID.',
-        tags: ['Subscribers'],
+        description: 'Get a specific subscriber by ID',
+        summary: 'Get Subscriber by ID',
+        tags: ['Event Subscribers'],
         params: {
           type: 'object',
           properties: {
@@ -325,8 +329,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard, fastifyZodPreHandler(updateSubscriberSchema)],
       schema: {
-        description: 'Update an existing subscriber.',
-        tags: ['Subscribers'],
+        description: 'Update an existing subscriber',
+        summary: 'Update Subscriber',
+        tags: ['Event Subscribers'],
         params: {
           type: 'object',
           properties: {
@@ -383,8 +388,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard],
       schema: {
-        description: 'Delete a subscriber.',
-        tags: ['Subscribers'],
+        description: 'Delete a subscriber',
+        summary: 'Delete Subscriber',
+        tags: ['Event Subscribers'],
         params: {
           type: 'object',
           properties: {
@@ -426,8 +432,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard],
       schema: {
-        description: 'Get all subscribers for a specific event.',
-        tags: ['Subscribers'],
+        description: 'Get all subscribers for a specific event',
+        summary: 'Get Subscribers by Event',
+        tags: ['Event Subscribers'],
         params: {
           type: 'object',
           properties: {
@@ -466,8 +473,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
     {
       preHandler: [authGuard],
       schema: {
-        description: 'Delete all subscribers.',
-        tags: ['Subscribers'],
+        description: 'Delete all subscribers',
+        summary: 'Delete All Subscribers',
+        tags: ['Event Subscribers'],
         response: {
           200: {
             type: 'object',
