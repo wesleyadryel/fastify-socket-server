@@ -228,7 +228,8 @@ class RedisStorage {
 
   async getUsersByUserId(userId: string): Promise<StoredUser[]> {
     const allUsers = await this.getAllUsers();
-    return allUsers.filter(user => user.identifiers.userId === userId);
+    const userIdNum = Number(userId);
+    return allUsers.filter(user => Number(user.identifiers.userId) === userIdNum);
   }
 
   async getUsersByIdentifiers(identifiers: Record<string, any>): Promise<StoredUser[]> {
