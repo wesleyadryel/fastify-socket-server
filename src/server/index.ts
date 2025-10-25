@@ -6,6 +6,7 @@ import helmet from '@fastify/helmet'
 
 import socketioServer from '../plugins/socket';
 import jwtApi from '../jwt/jwt-api';
+import subscriberApi from '../subscribers/api';
 import swaggerPlugin from '../plugins/swagger';
 import underPressurePlugin from '../plugins/under-pressure';
 
@@ -32,6 +33,7 @@ app.register(helmet, { contentSecurityPolicy: false });
 app.register(rateLimitPlugin);
 app.register(socketioServer);
 app.register(jwtApi);
+app.register(subscriberApi);
 app.register(underPressurePlugin);
 app.register(localRequestsPlugin);
 app.register(metricsPluginCustom);

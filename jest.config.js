@@ -8,4 +8,13 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
+  transformIgnorePatterns: [
+    "node_modules/(?!(uuid|@scalar)/)"
+  ],
+  extensionsToTreatAsEsm: ['.ts'],
+  globals: {
+    'ts-jest': {
+      useESM: true
+    }
+  }
 };

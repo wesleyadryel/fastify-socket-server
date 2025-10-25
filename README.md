@@ -190,6 +190,183 @@ Content-Type: application/json
 }
 ```
 
+### Subscriber Management
+
+All subscriber routes require authentication via `Authorization: Bearer <API_TOKEN>` header.
+
+#### POST `/subscribers`
+Creates a new event subscriber. If a subscriber with the same `eventListener` already exists, it will be updated (replaced) instead of creating a duplicate.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "eventListener": "customEvent",
+  "replicable": true,
+  "description": "Custom event handler for notifications"
+}
+```
+
+**Response (New subscriber):**
+```json
+{
+  "id": "uuid-here",
+  "eventListener": "customEvent",
+  "replicable": true,
+  "description": "Custom event handler for notifications",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "message": "Subscriber created successfully",
+  "wasUpdated": false
+}
+```
+
+**Response (Updated existing subscriber):**
+```json
+{
+  "id": "uuid-here",
+  "eventListener": "customEvent",
+  "replicable": false,
+  "description": "Updated description",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "message": "Subscriber updated (replaced existing subscriber with same eventListener)",
+  "wasUpdated": true
+}
+```
+
+#### GET `/subscribers`
+Gets all event subscribers.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid-here",
+    "eventListener": "customEvent",
+    "replicable": true,
+    "description": "Custom event handler",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+]
+```
+
+#### GET `/subscribers/:id`
+Gets a specific subscriber by ID.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+```
+
+**Response:**
+```json
+{
+  "id": "uuid-here",
+  "eventListener": "customEvent",
+  "replicable": true,
+  "description": "Custom event handler",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### PUT `/subscribers/:id`
+Updates an existing subscriber.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "eventListener": "updatedEvent",
+  "replicable": false,
+  "description": "Updated description"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid-here",
+  "eventListener": "updatedEvent",
+  "replicable": false,
+  "description": "Updated description",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### DELETE `/subscribers/:id`
+Deletes a subscriber.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Subscriber deleted successfully"
+}
+```
+
+#### GET `/subscribers/event/:eventListener`
+Gets all subscribers for a specific event.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid-here",
+    "eventListener": "customEvent",
+    "replicable": true,
+    "description": "Custom event handler",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+]
+```
+
+#### DELETE `/subscribers`
+Deletes all subscribers.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Successfully deleted 5 subscribers",
+  "deletedCount": 5
+}
+```
+
 ### Health Check
 
 #### GET `/alive`
@@ -350,6 +527,70 @@ Received when a user leaves the room.
 }
 ```
 
+### Dynamic Events
+
+The server supports dynamic event handling through the subscriber system. Any event registered as a subscriber will be automatically handled.
+
+#### Custom Event Handling
+
+When you emit a custom event that has been registered as a subscriber:
+
+```javascript
+// Emit a custom event
+socket.emit('customEvent', {
+  data: 'some data',
+  roomId: 'room123' // Optional: for replicable events
+}, (response) => {
+  console.log('Event processed:', response);
+});
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "event": "customEvent",
+    "subscribers": [
+      {
+        "subscriberId": "uuid-here",
+        "eventListener": "customEvent",
+        "replicable": true,
+        "processed": true
+      }
+    ],
+    "originalData": {
+      "data": "some data",
+      "roomId": "room123"
+    }
+  }
+}
+```
+
+#### Replicated Events
+
+If a subscriber has `replicable: true` and the event data includes a `roomId`, the event will be replicated to other clients in the same room using the same event name:
+
+```javascript
+// Listen for the same event name (no suffix)
+socket.on('customEvent', (data) => {
+  console.log('Event received:', data);
+});
+```
+
+**Replicated Event Data:**
+```json
+{
+  "data": "some data",
+  "roomId": "room123",
+  "userId": "user123",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "subscriberId": "uuid-here"
+}
+```
+
+**Security Note:** The `replicable` flag is a security setting that controls whether the backend should transmit events to other clients. Events with `replicable: false` will not be broadcast to other clients, providing a way to handle sensitive events securely.
+
 ## 📊 Monitoring
 
 ### Rate Limiting
@@ -468,6 +709,62 @@ import customPlugin from '../plugins/custom';
 
 app.register(customPlugin);
 ```
+
+### Subscriber System
+
+The subscriber system allows you to dynamically register event listeners that can process custom Socket.IO events.
+
+**Important:** Each `eventListener` can only have one subscriber. If you try to create a subscriber with an existing `eventListener`, the old subscriber will be replaced with the new one.
+
+**Security:** The `replicable` flag controls event transmission security:
+- `replicable: true` - Event will be broadcast to other clients in the same room
+- `replicable: false` - Event will only be processed by the backend, not transmitted to other clients (useful for sensitive operations)
+
+#### Creating a Subscriber
+
+Use the API to create a new subscriber:
+
+```bash
+curl -X POST http://localhost:3000/subscribers \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventListener": "notification",
+    "replicable": true,
+    "description": "Handle notification events"
+  }'
+```
+
+If a subscriber with the same `eventListener` already exists, it will be updated instead of creating a duplicate.
+
+#### Using Dynamic Events
+
+Once a subscriber is created, clients can emit events with that name:
+
+```javascript
+// Client emits the event
+socket.emit('notification', {
+  message: 'New notification',
+  roomId: 'room123'
+}, (response) => {
+  console.log('Event processed:', response);
+});
+
+// Other clients in the same room will receive the same event
+socket.on('notification', (data) => {
+  console.log('Notification received:', data);
+});
+```
+
+#### Subscriber Management
+
+- **Create:** `POST /subscribers`
+- **List:** `GET /subscribers`
+- **Get by ID:** `GET /subscribers/:id`
+- **Update:** `PUT /subscribers/:id`
+- **Delete:** `DELETE /subscribers/:id`
+- **Get by Event:** `GET /subscribers/event/:eventListener`
+- **Delete All:** `DELETE /subscribers`
 
 ## 🚀 Deploy
 

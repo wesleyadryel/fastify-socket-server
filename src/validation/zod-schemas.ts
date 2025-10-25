@@ -19,3 +19,20 @@ export const messageDataSchema = z.object({
   type: z.enum(['text', 'system', 'notification']).optional(),
 });
 
+export const createSubscriberSchema = z.object({
+  eventListener: z.string().min(1, 'eventListener is required'),
+  replicable: z.boolean().default(true),
+  description: z.string().optional(),
+});
+
+export const updateSubscriberSchema = z.object({
+  id: z.string().min(1, 'id is required'),
+  eventListener: z.string().min(1, 'eventListener is required').optional(),
+  replicable: z.boolean().optional(),
+  description: z.string().optional(),
+});
+
+export const deleteSubscriberSchema = z.object({
+  id: z.string().min(1, 'id is required'),
+});
+
