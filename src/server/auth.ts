@@ -51,11 +51,7 @@ export const authMiddleware = (
       []
     );
     
-    
-    socket.on('disconnect', () => {
-      redisStorage.removeUser(token);
-    });
-    
+  
     next();
   } catch (error: any) {
     Log.error('Auth Middleware Error: Invalid or expired token', {

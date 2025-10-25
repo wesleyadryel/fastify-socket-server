@@ -335,6 +335,85 @@ class RedisStorage {
     }
   }
 
+  async removeUserByIdentifiers(identifiers: Record<string, any>, token?: string): Promise<boolean> {
+    if (token) {
+      const user = await this.getUserByJWT(token);
+      if (user) {
+        const matches = Object.keys(identifiers).every(key => user.identifiers[key] === identifiers[key]);
+        if (matches) {
+          await this.removeUser(token);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const allUsers = await this.getAllUsers();
+    const userToRemove = allUsers.find(u => {
+      for (const key in identifiers) {
+        if (u.identifiers[key] !== identifiers[key]) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (!userToRemove) {
+      return false;
+    }
+
+    if (this.useRedis && this.redis) {
+      try {
+        const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
+        for (const key of keys) {
+          const data = await this.redis.hgetall(key);
+          if (data && data.socketId === userToRemove.socketId) {
+            await this.redis.del(key);
+            storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userId || '', userToRemove.identifiers);
+            return true;
+          }
+        }
+      } catch (error) {
+        console.error('Redis removeUserByIdentifiers error:', error);
+      }
+    } else {
+      for (const [jwtToken, user] of this.localCache.entries()) {
+        if (user.socketId === userToRemove.socketId) {
+          this.localCache.delete(jwtToken);
+          storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userId || '', userToRemove.identifiers);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  async invalidateToken(token: string): Promise<void> {
+    if (this.useRedis && this.redis) {
+      try {
+        const blacklistKey = `blacklist:${this.getJWTKey(token)}`;
+        await this.redis.set(blacklistKey, '1', 'EX', this.ttl);
+      } catch (error) {
+        console.error('Redis token invalidation error:', error);
+      }
+    }
+  }
+
+  async isTokenInvalidated(token: string): Promise<boolean> {
+    if (this.useRedis && this.redis) {
+      try {
+        const blacklistKey = `blacklist:${this.getJWTKey(token)}`;
+        const result = await this.redis.get(blacklistKey);
+        return result === '1';
+      } catch (error) {
+        console.error('Redis token validation error:', error);
+        return false;
+      }
+    }
+    return false;
+  }
+
   async disconnect(): Promise<void> {
     if (this.redis) {
       await this.redis.quit();

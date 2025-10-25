@@ -19,7 +19,7 @@ export const storageConfig: StorageConfig = {
     db: parseInt(process.env.REDIS_DB || '0')
   },
   userKeyPrefix: process.env.USER_KEY_PREFIX || 'user',
-  ttl: 3600
+  ttl: parseInt(process.env.STORAGE_TTL || '3600')
 };
 
 export function getStorageInfo(): { type: string; config: Partial<StorageConfig> } {
