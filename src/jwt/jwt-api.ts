@@ -50,8 +50,22 @@ export default async function jwtApi(fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const { userId, ...rest } = request.body as { userId: string };
-      const token = jwtManager.sign({ userId, ...rest });
+      const body = request.body as any;
+      const { userId, ...identifiers } = body;
+      
+      const payload: any = {
+        userId
+      };
+      
+      // Only add identifiers if there are additional fields beyond userId
+      if (Object.keys(identifiers).length > 0) {
+        payload.identifiers = {
+          userId,
+          ...identifiers
+        };
+      }
+      
+      const token = jwtManager.sign(payload);
       return { token };
     },
   );

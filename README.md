@@ -408,6 +408,165 @@ Authorization: Bearer <API_TOKEN>
 }
 ```
 
+### Server Events
+
+#### POST `/server/emit`
+Emits an event to socket clients from the server. Can target all clients or a specific room.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "eventName": "SERVER-ANNOUNCEMENT",
+  "data": {
+    "message": "Hello from server!",
+    "type": "announcement"
+  },
+  "roomId": "room-123",
+  "emitToUser": {
+    "userId": "user123",
+    "userSource": "mobile-app"
+  },
+  "includeSender": false
+}
+```
+
+**Parameters:**
+- `eventName` (required): Name of the event to emit
+- `data` (required): Data object to send with the event
+- `roomId` (optional): Specific room ID. If not provided, emits to all clients
+- `emitToUser` (optional): Object containing user identifiers to target specific user
+  - `userId` (optional): User ID from JWT
+  - `userSource` (optional): User source from JWT
+- `includeSender` (optional): Whether to include the server in the broadcast (default: false)
+
+**Note:** You can target by `roomId`, `emitToUser` (with any combination of identifiers), or broadcast to all clients. Only one targeting method should be used per request. The `emitToUser` object will match if ANY of the provided identifiers match the user's data.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Event emitted to room room-123",
+  "eventName": "SERVER-ANNOUNCEMENT",
+  "roomId": "room-123",
+  "clientsCount": 3
+}
+```
+
+**Examples:**
+
+Emit to all clients:
+```json
+{
+  "eventName": "SYSTEM-STATUS",
+  "data": {
+    "status": "maintenance",
+    "message": "Server maintenance in 5 minutes"
+  }
+}
+```
+
+Emit to specific room:
+```json
+{
+  "eventName": "ROOM-MESSAGE",
+  "data": {
+    "message": "Welcome to the room!",
+    "type": "welcome"
+  },
+  "roomId": "lobby",
+  "includeSender": true
+}
+```
+
+Emit to specific user by userId:
+```json
+{
+  "eventName": "PERSONAL-MESSAGE",
+  "data": {
+    "message": "This is a personal message for you!",
+    "type": "personal",
+    "priority": "high"
+  },
+  "emitToUser": {
+    "userId": "user123"
+  }
+}
+```
+
+Emit to specific user by userSource:
+```json
+{
+  "eventName": "SOURCE-NOTIFICATION",
+  "data": {
+    "message": "Notification from your source platform",
+    "type": "source-update",
+    "platform": "mobile"
+  },
+  "emitToUser": {
+    "userSource": "mobile-app"
+  }
+}
+```
+
+Emit to specific user with multiple identifiers:
+```json
+{
+  "eventName": "MULTI-IDENTIFIER-MESSAGE",
+  "data": {
+    "message": "Message using multiple identifiers",
+    "type": "multi-identifier",
+    "priority": "medium"
+  },
+  "emitToUser": {
+    "userId": "user123",
+    "userSource": "web-app"
+  }
+}
+```
+
+#### GET `/clients`
+Get all connected socket clients with their identifiers and user data.
+
+**Headers:**
+```
+Authorization: Bearer <API_TOKEN>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "clients": [
+    {
+      "socketId": "abc123def456",
+      "userId": "user123",
+      "authenticated": true,
+      "user": {
+        "userId": "user123",
+        "userSource": "mobile-app",
+        "email": "user@example.com",
+        "role": "admin"
+      },
+      "connectedAt": "2024-01-01T00:00:00.000Z",
+      "rooms": ["room1", "room2"]
+    }
+  ],
+  "totalClients": 1
+}
+```
+
+**Use Cases:**
+- Debug user connections and identifiers
+- Monitor active sessions
+- Verify user authentication status
+- Check which rooms users are in
+
 ### Health Check
 
 #### GET `/alive`
@@ -830,6 +989,8 @@ socket.on('notification', (data) => {
 - **Delete:** `DELETE /subscribers/:id`
 - **Get by Event:** `GET /subscribers/event/:eventListener`
 - **Delete All:** `DELETE /subscribers`
+- **Server Emit:** `POST /server/emit`
+- **Get Clients:** `GET /clients`
 
 ## 🚀 Deploy
 

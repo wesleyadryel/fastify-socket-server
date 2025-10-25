@@ -6,6 +6,11 @@ const JWT_EXPIRES_IN = '1h';
 
 export interface JwtPayload {
   userId: string;
+  identifiers?: {
+    userId?: string;
+    userSource?: string;
+    [key: string]: any;
+  };
   [key: string]: any;
 }
 

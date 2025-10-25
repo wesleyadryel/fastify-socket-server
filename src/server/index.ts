@@ -17,6 +17,14 @@ import rateLimitPlugin from '../plugins/rateLimit';
 import { registerSocketHandlers } from '../socket';
 import errorHandlerPlugin from '../errors/error-handler';
 import { Server } from 'socket.io';
+import { 
+  reconnectionManager, 
+  redisStorage, 
+  cleanupManager, 
+  healthMonitor,
+  initializeStorage,
+  shutdownStorage 
+} from '../storage';
 
 
 const app = fastify({
@@ -41,8 +49,11 @@ app.register(metricsPluginCustom);
 app.register(errorHandlerPlugin);
 
 
-app.ready((err) => {
+app.ready(async (err) => {
   if (err) throw err;
+  
+  // Initialize storage system
+  await initializeStorage();
   
   if (process.env.NODE_ENV === 'development') {
     const { subscriberService } = require('../subscribers');
@@ -58,6 +69,9 @@ app.ready((err) => {
     }
   }
   
+  // Configure reconnection manager
+  reconnectionManager.setIO(app.io);
+  
   app.io.on('connection', (socket: any) => {
     console.info('Socket connected!', socket.id);
     registerSocketHandlers(socket);
@@ -68,6 +82,19 @@ app.ready((err) => {
 if (process.env.NODE_ENV !== 'test') {
   app.listen({ port: 3000, host: '0.0.0.0' });
 }
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('🛑 Received SIGINT, shutting down gracefully...');
+  await shutdownStorage();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  await shutdownStorage();
+  process.exit(0);
+});
 
 
 declare module 'fastify' {
