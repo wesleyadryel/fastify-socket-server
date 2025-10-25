@@ -6,6 +6,7 @@ dotenv.config();
 
 import { createJwtSchema, verifyJwtSchema } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
+import { redisStorage } from '../storage/redis';
 
 async function authGuard(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers['authorization'];
@@ -66,6 +67,16 @@ export default async function jwtApi(fastify: FastifyInstance) {
       }
       
       const token = jwtManager.sign(payload);
+      
+      // Store user in Redis immediately when token is created
+      await redisStorage.addUser(
+        token,
+        'temp-socket-id', // Will be updated when user connects
+        true,
+        payload.identifiers || { userId: payload.userId },
+        []
+      );
+      
       return { token };
     },
   );

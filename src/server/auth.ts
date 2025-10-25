@@ -13,7 +13,7 @@ export interface SocketData {
   };
 }
 
-export const authMiddleware = (
+export const authMiddleware = async (
   socket: Socket<any, any, any, SocketData>,
   next: (err?: ExtendedError) => void
 ) => {
@@ -37,6 +37,11 @@ export const authMiddleware = (
     
     if (!payload || typeof payload !== 'object' || !payload.userId) {
       throw new Error('Invalid payload');
+    }
+
+    const userExists = await redisStorage.getUserByJWT(token);
+    if (!userExists) {
+      throw new Error('Token not found in storage - user may have been disconnected');
     }
     
     socket.data.authenticated = true;

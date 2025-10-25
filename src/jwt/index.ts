@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import 'dotenv/config';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
-const JWT_EXPIRES_IN = '1h';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '999y';
 
 export interface JwtPayload {
   userId: string;
@@ -15,8 +15,11 @@ export interface JwtPayload {
 }
 
 export const jwtManager = {
-  sign(payload: JwtPayload, options?: jwt.SignOptions) {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN, ...options });
+  sign(payload: JwtPayload, options?: any) {
+    return jwt.sign(payload, JWT_SECRET, { 
+      ...options,
+      expiresIn: JWT_EXPIRES_IN
+    });
   },
   verify(token: string): JwtPayload {
     return jwt.verify(token, JWT_SECRET) as JwtPayload;
