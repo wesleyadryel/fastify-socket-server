@@ -21,28 +21,7 @@ export default async function userApi(fastify: FastifyInstance) {
         response: {
           200: {
             type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              clientsList: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    socketId: { type: 'string' },
-                    identifiers: {
-                      type: 'object',
-                      properties: {
-                        userId: { type: 'string', nullable: true },
-                        userSource: { type: 'string', nullable: true },
-                      }
-                    },
-                    connectedAt: { type: 'string' },
-                    rooms: { type: 'array', items: { type: 'string' } }
-                  }
-                }
-              },
-              totalClients: { type: 'number' }
-            }
+            additionalProperties: true
           }
         }
       }
@@ -99,25 +78,7 @@ export default async function userApi(fastify: FastifyInstance) {
       response: {
         200: {
           type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            user: {
-              type: 'object',
-              properties: {
-                socketId: { type: 'string' },
-                identifiers: {
-                  type: 'object',
-                  properties: {
-                    userId: { type: 'string', nullable: true },
-                    userSource: { type: 'string', nullable: true },
-                  }
-                },
-                connectedAt: { type: 'string' },
-                lastSeen: { type: 'string' },
-                rooms: { type: 'array', items: { type: 'string' } }
-              }
-            }
-          }
+          additionalProperties: true
         }
       }
     }
@@ -168,40 +129,15 @@ export default async function userApi(fastify: FastifyInstance) {
       response: {
         200: {
           type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            user: {
-              type: 'object',
-              properties: {
-                socketId: { type: 'string' },
-                identifiers: {
-                  type: 'object',
-                  properties: {
-                    userId: { type: 'string', nullable: true },
-                    userSource: { type: 'string', nullable: true },
-                  }
-                },
-                connectedAt: { type: 'string' },
-                lastSeen: { type: 'string' },
-                rooms: { type: 'array', items: { type: 'string' } },
-                isConnected: { type: 'boolean' }
-              }
-            }
-          }
+          additionalProperties: true
         },
         400: {
           type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
+          additionalProperties: true
         },
         404: {
           type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
+          additionalProperties: true
         }
       }
     }
