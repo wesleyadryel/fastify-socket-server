@@ -4,6 +4,8 @@ import { roomIdSchema } from '../validation/zod-schemas';
 import { subscriberService } from '../subscribers';
 import { EventDataValidator } from '../subscribers/validation';
 import { roomStorage } from '../room';
+import { Log } from '../utils/log';
+import { redisStorage } from '../storage/redis';
 
 export function handleJoinRoom(socket: Socket) {
   socket.on('joinRoom', async (roomId: string, callback?: (response: any) => void) => {
@@ -12,31 +14,44 @@ export function handleJoinRoom(socket: Socket) {
       const userUuid = socket.data.userUuid;
 
       if (!userUuid) {
-        callback?.({ success: false, error: 'User not authenticated' });
-        return;
+        const error = { success: false, error: 'User not authenticated' };
+        if (callback) return callback(error);
+        throw new Error('User not authenticated');
       }
 
       const canJoinResult = await roomStorage.canUserJoinRoom(parsed.roomId, userUuid);
       if (!canJoinResult.canJoin) {
-        callback?.({ success: false, error: canJoinResult.reason || 'Cannot join room' });
-        return;
+        const error = { success: false, error: canJoinResult.reason || 'Cannot join room' };
+        if (callback) return callback(error);
+        throw new Error(canJoinResult.reason || 'Cannot join room');
       }
 
       const isMember = await roomStorage.isUserInRoom(parsed.roomId, userUuid);
       if (!isMember) {
         const addResult = await roomStorage.addMemberToRoom(parsed.roomId, userUuid, socket);
         if (!addResult.success) {
-          callback?.({ success: false, error: addResult.message || 'Failed to add user to room' });
-          return;
+          const error = { success: false, error: addResult.message || 'Failed to add user to room' };
+          if (callback) return callback(error);
+          throw new Error(addResult.message || 'Failed to add user to room');
         }
+
+        socket.to(parsed.roomId).emit('userJoined', {
+          userUuid,
+          roomId: parsed.roomId,
+          timestamp: new Date().toISOString()
+        });
       }
 
-      callback?.({ success: true });
+      if (callback) callback({ success: true, roomId: parsed.roomId });
     } catch (err) {
-      if (err instanceof ZodError) {
-        callback?.({ success: false, error: 'Validation error', details: err.issues });
+      const error = err instanceof ZodError 
+        ? { success: false, error: 'Validation error', details: err.issues }
+        : { success: false, error: 'Invalid request' };
+      
+      if (callback) {
+        callback(error);
       } else {
-        callback?.({ success: false, error: 'Invalid request' });
+        Log.error('Join room error', { error: err, socketId: socket.id });
       }
     }
   });
@@ -49,34 +64,54 @@ export function handleLeaveRoom(socket: Socket) {
       const userUuid = socket.data.userUuid;
 
       if (!userUuid) {
-        callback?.({ success: false, error: 'User not authenticated' });
-        return;
+        const error = { success: false, error: 'User not authenticated' };
+        if (callback) return callback(error);
+        throw new Error('User not authenticated');
       }
+
+      socket.leave(parsed.roomId);
 
       const result = await roomStorage.removeMemberFromRoom(parsed.roomId, userUuid);
+      
+      socket.to(parsed.roomId).emit('userLeft', {
+        userUuid,
+        roomId: parsed.roomId,
+        timestamp: new Date().toISOString()
+      });
+
       if (!result.success) {
-        callback?.({ success: false, error: result.reason || 'Failed to remove user from room' });
+        const error = { success: false, error: result.reason || 'Failed to remove user from room' };
+        if (callback) return callback(error);
+        Log.warning('Failed to remove user from storage', {
+          roomId: parsed.roomId, 
+          userUuid,
+          reason: result.reason 
+        });
         return;
       }
 
-      callback?.({ success: true, data: parsed });
-      socket.leave(parsed.roomId);
-      socket.to(parsed.roomId).emit('userLeft', {
-        userUuid: userUuid,
-        roomId: parsed.roomId,
-      });
+      if (callback) callback({ success: true, data: parsed });
     } catch (err) {
-      if (err instanceof ZodError) {
-        callback?.({ success: false, error: 'Validation error', details: err.issues });
+      const error = err instanceof ZodError 
+        ? { success: false, error: 'Validation error', details: err.issues }
+        : { success: false, error: 'Invalid request' };
+      
+      if (callback) {
+        callback(error);
       } else {
-        callback?.({ success: false, error: 'Invalid request' });
+        Log.error('Leave room error', { error: err, socketId: socket.id });
       }
     }
   });
 }
 
 export function handleDynamicEvents(socket: Socket) {
-  socket.onAny((eventName: string, data: any, callback?: (response: any) => void) => {
+  socket.onAny(async (eventName: string, data: any, callback?: (response: any) => void) => {
+    const builtInEvents = ['joinRoom', 'leaveRoom', 'disconnect', 'disconnecting', 'connect', 'connect_error'];
+    if (builtInEvents.includes(eventName)) {
+      return;
+    }
+
     const hasSpecificListener = socket.listenerCount(eventName) > 0;
 
     if (hasSpecificListener) {
@@ -87,11 +122,13 @@ export function handleDynamicEvents(socket: Socket) {
       const subscribers = subscriberService.getSubscribersByEvent(eventName);
 
       if (subscribers.length === 0) {
-        callback?.({ success: false, error: `No subscribers found for event: ${eventName}` });
+        if (callback) {
+          callback({ success: false, error: `No subscribers found for event: ${eventName}` });
+        }
         return;
       }
 
-      const results = subscribers.map(subscriber => {
+      const results = await Promise.all(subscribers.map(async (subscriber) => {
         const result = {
           subscriberId: subscriber.id,
           eventListener: subscriber.eventListener,
@@ -106,18 +143,20 @@ export function handleDynamicEvents(socket: Socket) {
             try {
               sanitizedData = EventDataValidator.validateAndSanitizeData(data, subscriber.parameters);
             } catch (validationError: any) {
-              callback?.({
-                success: false,
-                error: `Validation failed: ${validationError.message}`,
-                subscriberId: subscriber.id
-              });
+              if (callback) {
+                callback({
+                  success: false,
+                  error: `Validation failed: ${validationError.message}`,
+                  subscriberId: subscriber.id
+                });
+              }
               return result;
             }
           }
 
           const eventData = {
             ...sanitizedData,
-            userUuid: socket.data.identifiers?.userUuid,
+            userUuid: socket.data.userUuid || socket.data.identifiers?.userUuid,
             timestamp: new Date().toISOString(),
             subscriberId: subscriber.id
           };
@@ -136,18 +175,81 @@ export function handleDynamicEvents(socket: Socket) {
         }
 
         return result;
-      });
+      }));
 
-      callback?.({
-        success: true,
-        data: {
-          event: eventName,
-          originalData: data
-        }
-      });
-
+      if (callback) {
+        callback({
+          success: true,
+          data: {
+            event: eventName,
+            originalData: data,
+            subscribers: results
+          }
+        });
+      }
     } catch (err) {
-      callback?.({ success: false, error: 'Event processing failed' });
+      Log.error('Dynamic event processing failed', { 
+        error: err, 
+        eventName, 
+        socketId: socket.id 
+      });
+      if (callback) {
+        callback({ success: false, error: 'Event processing failed' });
+      }
+    }
+  });
+}
+
+export function handleDisconnect(socket: Socket) {
+  socket.on('disconnect', async (reason) => {
+    Log.log('Socket disconnected', {
+      socketId: socket.id,
+      reason,
+      userUuid: socket.data.userUuid
+    });
+
+    try {
+      const userUuid = socket.data.userUuid;
+      const token = socket.data.token;
+
+      const rooms = Array.from(socket.rooms).filter(room => room !== socket.id);
+      for (const roomId of rooms) {
+        if (userUuid) {
+          const result = await roomStorage.removeMemberFromRoom(roomId, userUuid, true);
+          if (result.success) {
+            socket.to(roomId).emit('userLeft', {
+              userUuid,
+              roomId,
+              timestamp: new Date().toISOString(),
+              reason: 'disconnected'
+            });
+          }
+        }
+        socket.leave(roomId);
+      }
+
+      if (token && userUuid) {
+        await redisStorage.removeUser(token);
+      }
+    } catch (error) {
+      Log.error('Error during disconnect cleanup', {
+        error,
+        socketId: socket.id
+      });
+    }
+  });
+
+  socket.on('disconnecting', async (reason) => {
+    const rooms = Array.from(socket.rooms).filter(room => room !== socket.id);
+    const userUuid = socket.data.userUuid;
+
+    if (userUuid && rooms.length > 0) {
+      Log.log('Socket disconnecting from rooms', {
+        socketId: socket.id,
+        rooms,
+        userUuid,
+        reason
+      });
     }
   });
 }

@@ -77,7 +77,21 @@ app.ready(async (err) => {
   reconnectionManager.setIO(app.io);
   
   app.io.on('connection', (socket: any) => {
-    console.info('Socket connected!', socket.id);
+    console.info('Socket connected!', {
+      socketId: socket.id,
+      userUuid: socket.data.userUuid,
+      authenticated: socket.data.authenticated,
+      rooms: socket.rooms ? Array.from(socket.rooms) : []
+    });
+    
+    socket.on('error', (error: Error) => {
+      console.error('Socket error:', {
+        socketId: socket.id,
+        error: error.message,
+        userUuid: socket.data.userUuid
+      });
+    });
+    
     registerSocketHandlers(socket);
   });
 });

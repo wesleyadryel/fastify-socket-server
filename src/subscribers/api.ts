@@ -264,13 +264,17 @@ export default async function subscriberApi(fastify: FastifyInstance) {
             targetSockets = [result.socket];
           }
         } else {
-          for (const [socketId, socket] of io.sockets.sockets) {
-            const socketIdentifiers = socket.data?.identifiers || {};
+          const allSockets = await io.sockets.fetchSockets();
+          for (const socket of allSockets) {
+            const socketIdentifiers = (socket as any).data?.identifiers || {};
             const matches = Object.entries(emitToUser).every(([key, value]) => 
               socketIdentifiers[key] === value
             );
             if (matches) {
-              targetSockets.push(socket);
+              const fetchedSocket = io.sockets.sockets.get(socket.id);
+              if (fetchedSocket) {
+                targetSockets.push(fetchedSocket);
+              }
             }
           }
         }
@@ -300,7 +304,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
         }
       } else {
         io.emit(eventName, data);
-        clientsCount = io.sockets.sockets.size;
+        clientsCount = io.engine.clientsCount;
         targetInfo = 'all clients';
       }
 

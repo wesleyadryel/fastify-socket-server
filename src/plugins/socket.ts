@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 import { Server, ServerOptions } from 'socket.io';
 import { authMiddleware } from '../server/auth';
+import { Log } from '../utils/log';
 
 export type FastifySocketioOptions = Partial<ServerOptions> & {
   preClose?: (done: () => void) => void;
@@ -23,9 +24,30 @@ const fastifySocketIO: FastifyPluginAsync<FastifySocketioOptions> = fp(
         credentials: true
       },
       transports: ['websocket', 'polling'],
+      connectionStateRecovery: {
+        maxDisconnectionDuration: 2 * 60 * 1000,
+        skipMiddlewares: true,
+      },
+      pingTimeout: 60000,
+      pingInterval: 25000,
       ...options
     });
+
     io.use(authMiddleware);
+
+    io.engine.on('connection_error', (err) => {
+      Log.error('Socket.IO connection error', {
+        error: err.message,
+        req: err.req?.url,
+        code: err.code,
+        context: err.context
+      });
+    });
+
+    io.on('new_namespace', (namespace) => {
+      Log.log('New namespace created', { namespace: namespace.name });
+    });
+
     fastify.decorate('io', io);
 
     fastify.addHook('preClose', (done) => {
