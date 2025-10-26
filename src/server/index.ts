@@ -49,7 +49,7 @@ app.register(socketioServer);
 app.register(jwtApi);
 app.register(subscriberApi);
 app.register(userApi);
-app.register(roomApi, { prefix: '/api' });
+app.register(roomApi);
 app.register(underPressurePlugin);
 app.register(localRequestsPlugin);
 app.register(metricsPluginCustom);
