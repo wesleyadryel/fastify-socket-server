@@ -5,7 +5,8 @@ A Fastify server with Socket.IO integration for real-time communication, JWT aut
 ## 🚀 Features
 
 - **Fastify** - Fast and efficient web framework
-- **Socket.IO** - Real-time communication
+- **Socket.IO** - Real-time communication with v4 best practices
+- **Socket.IO Admin UI** - Real-time monitoring and debugging
 - **JWT Authentication** - Token-based authentication
 - **Rate Limiting** - Protection against abuse
 - **Health Check** - Server health monitoring
@@ -54,6 +55,10 @@ API_TOKEN=your-api-token
 # Environment
 NODE_ENV=development
 Debug=true
+
+# Admin UI (optional)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=changeit
 
 # Prometheus Metrics
 PROMETHEUS_PREFIX=node_fastfy
@@ -1013,3 +1018,36 @@ For support, open an issue in the repository or contact the author.
 **Author:** Wesley Adryel  
 **Version:** 1.0.0  
 **License:** MIT
+
+---
+
+## 🎛️ Socket.IO Admin UI
+
+The project includes Socket.IO Admin UI for monitoring and debugging.
+
+### Access Admin UI
+
+1. Go to [https://admin.socket.io](https://admin.socket.io)
+2. Enter your server URL (e.g., `http://localhost:3000`)
+3. Enter credentials if authentication is enabled
+
+### Features
+
+- **Server Overview** - See all connected servers and clients
+- **Socket Details** - View individual socket instances and their data
+- **Room Management** - Monitor rooms and their members
+- **Event Tracking** - See all events emitted/received
+- **Administrative Operations** - Join, leave, and disconnect operations
+
+### Configuration
+
+Admin UI is automatically enabled in development mode. To configure authentication, add to your `.env`:
+
+```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your-secure-password
+```
+
+**Note:** 
+- The password is automatically hashed by the application
+- In production, always use authentication!

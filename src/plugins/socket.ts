@@ -3,6 +3,8 @@ import fp from 'fastify-plugin';
 import { Server, ServerOptions } from 'socket.io';
 import { authMiddleware } from '../server/auth';
 import { Log } from '../utils/log';
+import { instrument } from '@socket.io/admin-ui';
+import { hashSync } from 'bcryptjs';
 
 export type FastifySocketioOptions = Partial<ServerOptions> & {
   preClose?: (done: () => void) => void;
@@ -16,10 +18,11 @@ const fastifySocketIO: FastifyPluginAsync<FastifySocketioOptions> = fp(
     };
 
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'];
+    const adminOrigins = ['https://admin.socket.io'];
     
     const io = new Server(fastify.server, {
       cors: {
-        origin: allowedOrigins,
+        origin: [...allowedOrigins, ...adminOrigins],
         methods: ["GET", "POST"],
         credentials: true
       },
@@ -47,6 +50,29 @@ const fastifySocketIO: FastifyPluginAsync<FastifySocketioOptions> = fp(
     io.on('new_namespace', (namespace) => {
       Log.log('New namespace created', { namespace: namespace.name });
     });
+
+    const adminUsername = process.env.ADMIN_USERNAME;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    const hasAdminAuth = adminUsername && adminPassword;
+    
+    if (process.env.NODE_ENV === 'development' || process.env.Debug === 'true') {
+      const authConfig = hasAdminAuth ? {
+        type: "basic" as const,
+        username: adminUsername!,
+        password: hashSync(adminPassword!, 10)
+      } : false;
+      
+      instrument(io, {
+        auth: authConfig,
+        mode: "development",
+        serverId: require('os').hostname() + '#' + process.pid
+      });
+      
+      Log.log('Socket.IO Admin UI enabled', {
+        mode: 'development',
+        auth: hasAdminAuth ? 'enabled' : 'disabled'
+      });
+    }
 
     fastify.decorate('io', io);
 
