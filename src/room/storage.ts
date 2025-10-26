@@ -53,7 +53,7 @@ class RoomStorage {
           isPrivate: room.isPrivate.toString(),
           members: JSON.stringify(room.members)
         });
-        await this.redis.expire(roomKey, 86400 * 30); // 30 days
+        await this.redis.expire(roomKey, 86400 * 30);
       } catch (error) {
         console.error('Redis storage error:', error);
         this.localCache.set(room.id, room);
@@ -181,7 +181,6 @@ class RoomStorage {
   async addMemberToRoom(roomId: string, userId: string, socket?: Socket): Promise<{ success: boolean; message?: string }> {
     const room = await this.getRoom(roomId);
     if (!room) {
-      console.log('room not found', roomId);
       return { success: false, message: 'Room not found' };
     }
 
@@ -192,10 +191,6 @@ class RoomStorage {
     if (room.members.includes(userId)) {
       if (socket) {
         socket.join(roomId);
-        socket.to(roomId).emit('userJoined', {
-          userUuid: userId,
-          roomId: roomId,
-        });
       }
       return { success: true, message: 'User is already a member' };
     }
@@ -214,7 +209,7 @@ class RoomStorage {
         try {
           const membersKey = this.getRoomMembersKey(roomId);
           await this.redis.hset(membersKey, userId, JSON.stringify(member));
-          await this.redis.expire(membersKey, 86400 * 30); // 30 days
+          await this.redis.expire(membersKey, 86400 * 30);
         } catch (error) {
           console.error('Redis add member error:', error);
         }
@@ -227,10 +222,6 @@ class RoomStorage {
 
       if (socket) {
         socket.join(roomId);
-        socket.to(roomId).emit('userJoined', {
-          userUuid: userId,
-          roomId: roomId,
-        });
       }
     }
 
@@ -244,7 +235,7 @@ class RoomStorage {
     }
 
     if (!room.members.includes(userId)) {
-      return { success: true }; // Not a member
+      return { success: true };
     }
 
     if (!forceRemove && !room.allowSelfJoin) {

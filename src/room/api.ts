@@ -207,7 +207,6 @@ export default async function roomApi(fastify: FastifyInstance) {
 
             let room = await roomStorage.getRoom(roomId);
 
-            // Se a sala não existe e forceCreate é true, criar a sala
             if (!room && forceCreate) {
                 const newRoom: Room = {
                     id: roomId,
