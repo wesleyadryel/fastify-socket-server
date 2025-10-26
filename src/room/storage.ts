@@ -220,14 +220,18 @@ class RoomStorage {
     return success;
   }
 
-  async removeMemberFromRoom(roomId: string, userId: string): Promise<boolean> {
+  async removeMemberFromRoom(roomId: string, userId: string, forceRemove: boolean = false): Promise<{ success: boolean; reason?: string }> {
     const room = await this.getRoom(roomId);
     if (!room) {
-      return false;
+      return { success: false, reason: 'Room not found' };
     }
 
     if (!room.members.includes(userId)) {
-      return true; // Not a member
+      return { success: true }; // Not a member
+    }
+
+    if (!forceRemove && !room.allowSelfJoin) {
+      return { success: false, reason: 'Room does not allow self-removal' };
     }
 
     const updatedMembers = room.members.filter(id => id !== userId);
@@ -248,7 +252,7 @@ class RoomStorage {
       }
     }
 
-    return success;
+    return { success };
   }
 
   async getRoomMembers(roomId: string): Promise<RoomMember[]> {

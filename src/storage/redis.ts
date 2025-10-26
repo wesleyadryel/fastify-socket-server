@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { v4 as uuidv4 } from 'uuid';
 import { storageEvents } from './events';
 import { storageConfig } from './config';
 
@@ -42,6 +43,13 @@ class RedisStorage {
     const crypto = require('crypto');
     const hash = crypto.createHash('sha256').update(jwtToken).digest('hex');
     return `${storageConfig.userKeyPrefix}:${hash}`;
+  }
+
+  private generateUserUuid(jwtToken: string): string {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256').update(jwtToken).digest('hex');
+    const randomBytes = Buffer.from(hash.substring(0, 32), 'hex');
+    return uuidv4({ random: randomBytes });
   }
 
   async addUser(jwtToken: string, socketId: string, authenticated: boolean, identifiers: Record<string, any>, rooms: string[] = []): Promise<void> {

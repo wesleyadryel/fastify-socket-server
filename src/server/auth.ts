@@ -11,6 +11,7 @@ export interface SocketData {
     userSource?: string;
     [key: string]: any;
   };
+  userUuid?: string;
 }
 
 export const authMiddleware = async (
@@ -46,6 +47,7 @@ export const authMiddleware = async (
     
     socket.data.authenticated = true;
     socket.data.identifiers = payload.identifiers || { userId: payload.userId };
+    socket.data.userUuid = payload.identifiers?.userUuid || payload.identifiers?.uuid;
     
     // Store user data in persistent storage using JWT as primary identifier
     redisStorage.updateUser(

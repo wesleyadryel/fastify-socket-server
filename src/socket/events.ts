@@ -9,14 +9,14 @@ export function handleJoinRoom(socket: Socket) {
   socket.on('joinRoom', async (roomId: string, callback: (response: any) => void) => {
     try {
       const parsed = roomIdSchema.parse({ roomId });
-      const userId = socket.data.identifiers?.userId;
+      const userUuid = socket.data.userUuid;
       
-      if (!userId) {
+      if (!userUuid) {
         callback({ success: false, error: 'User not authenticated' });
         return;
       }
 
-      const canJoinResult = await roomStorage.canUserJoinRoom(parsed.roomId, userId);
+      const canJoinResult = await roomStorage.canUserJoinRoom(parsed.roomId, userUuid);
       if (!canJoinResult.canJoin) {
         if (callback) {
           callback({ 
@@ -27,9 +27,9 @@ export function handleJoinRoom(socket: Socket) {
         return;
       }
 
-      const isMember = await roomStorage.isUserInRoom(parsed.roomId, userId);
+      const isMember = await roomStorage.isUserInRoom(parsed.roomId, userUuid);
       if (!isMember) {
-        const added = await roomStorage.addMemberToRoom(parsed.roomId, userId);
+        const added = await roomStorage.addMemberToRoom(parsed.roomId, userUuid);
         if (!added) {
           if (callback) {
             callback({ success: false, error: 'Failed to add user to room' });
@@ -43,7 +43,7 @@ export function handleJoinRoom(socket: Socket) {
       }
       socket.join(parsed.roomId);
       socket.to(parsed.roomId).emit('userJoined', {
-        userId: userId,
+        userUuid: userUuid,
         roomId: parsed.roomId,
       });
     } catch (err) {
@@ -64,17 +64,17 @@ export function handleLeaveRoom(socket: Socket) {
   socket.on('leaveRoom', async (roomId: string, callback: (response: any) => void) => {
     try {
       const parsed = roomIdSchema.parse({ roomId });
-      const userId = socket.data.identifiers?.userId;
+      const userUuid = socket.data.userUuid;
       
-      if (!userId) {
+      if (!userUuid) {
         callback({ success: false, error: 'User not authenticated' });
         return;
       }
 
-      const removed = await roomStorage.removeMemberFromRoom(parsed.roomId, userId);
-      if (!removed) {
+      const result = await roomStorage.removeMemberFromRoom(parsed.roomId, userUuid);
+      if (!result.success) {
         if (callback) {
-          callback({ success: false, error: 'Failed to remove user from room' });
+          callback({ success: false, error: result.reason || 'Failed to remove user from room' });
         }
         return;
       }
@@ -84,7 +84,7 @@ export function handleLeaveRoom(socket: Socket) {
       }
       socket.leave(parsed.roomId);
       socket.to(parsed.roomId).emit('userLeft', {
-        userId: userId,
+        userUuid: userUuid,
         roomId: parsed.roomId,
       });
     } catch (err) {
@@ -148,7 +148,7 @@ export function handleDynamicEvents(socket: Socket) {
 
           const eventData = {
             ...sanitizedData,
-            userId: socket.data.identifiers?.userId,
+            userUuid: socket.data.identifiers?.userUuid,
             timestamp: new Date().toISOString(),
             subscriberId: subscriber.id
           };

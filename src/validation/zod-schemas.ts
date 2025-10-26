@@ -7,6 +7,7 @@ export const roomIdSchema = z.object({
 
 export const createJwtSchema = z.object({
   userId: z.union([z.string().min(1, 'userId is required'), z.number()]),
+  uuid: z.union([z.string(), z.number()]).optional(),
 });
 
 export const verifyJwtSchema = z.object({

@@ -1,12 +1,16 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { jwtManager } from '.';
 import dotenv from 'dotenv';
+import { v4 as uuidv4 } from 'uuid';
 dotenv.config();
-
 
 import { createJwtSchema, verifyJwtSchema } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
 import { redisStorage } from '../storage/redis';
+
+function generateUserUuid(): string {
+  return uuidv4();
+}
 
 async function authGuard(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers['authorization'];
@@ -24,7 +28,6 @@ async function authGuard(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export default async function jwtApi(fastify: FastifyInstance) {
-
   fastify.post(
     '/jwt/create',
     {
@@ -36,7 +39,8 @@ export default async function jwtApi(fastify: FastifyInstance) {
         body: {
           type: 'object',
           properties: {
-            userId: { type: ['string', 'number'], description: 'User identifier' }
+            userId: { type: ['string', 'number'], description: 'User identifier' },
+            uuid: { type: ['string', 'number'], description: 'User UUID', nullable: true }
           },
           required: ['userId']
         },
@@ -52,35 +56,37 @@ export default async function jwtApi(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const body = request.body as any;
-      const { userId, ...identifiers } = body;
-      
-      const payload: any = {
-        userId
-      };
-      
-      // Only add identifiers if there are additional fields beyond userId
-      if (Object.keys(identifiers).length > 0) {
-        payload.identifiers = {
-          userId,
-          ...identifiers
-        };
+      let { userId, uuid, ...identifiers } = body;
+
+      if (!uuid) {
+        uuid = generateUserUuid();
       }
-      
+
+      const payload: any = {
+        userId,
+        uuid
+      };
+
+      payload.identifiers = {
+        userId,
+        uuid,
+        userUuid: uuid,
+        ...identifiers
+      };
+
       const token = jwtManager.sign(payload);
-      
-      // Store user in Redis immediately when token is created
+
       await redisStorage.addUser(
         token,
-        'temp-socket-id', // Will be updated when user connects
+        'temp-socket-id',
         true,
-        payload.identifiers || { userId: payload.userId },
+        payload.identifiers,
         []
       );
-      
-      return { token };
-    },
-  );
 
+      return { token };
+    }
+  );
 
   fastify.post(
     '/jwt/decode',
@@ -111,9 +117,8 @@ export default async function jwtApi(fastify: FastifyInstance) {
       const { token } = request.body as { token: string };
       const payload = jwtManager.decode(token);
       return { payload };
-    },
+    }
   );
-
 
   fastify.post(
     '/jwt/verify',
@@ -150,6 +155,6 @@ export default async function jwtApi(fastify: FastifyInstance) {
       } catch (e) {
         return { valid: false, error: (e as Error).message, payload: null };
       }
-    },
+    }
   );
 }

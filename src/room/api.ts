@@ -277,9 +277,9 @@ export default async function roomApi(fastify: FastifyInstance) {
         return;
       }
 
-      const success = await roomStorage.removeMemberFromRoom(roomId, targetUserId);
-      if (!success) {
-        reply.code(400).send({ error: 'Failed to remove member from room' });
+      const result = await roomStorage.removeMemberFromRoom(roomId, targetUserId, true);
+      if (!result.success) {
+        reply.code(400).send({ error: result.reason || 'Failed to remove member from room' });
         return;
       }
 
