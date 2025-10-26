@@ -35,14 +35,18 @@ export function handleJoinRoom(socket: Socket) {
           throw new Error(addResult.message || 'Failed to add user to room');
         }
 
-        socket.to(parsed.roomId).emit('userJoined', {
+        socket.compress(true).to(parsed.roomId).emit('userJoined', {
           userUuid,
           roomId: parsed.roomId,
           timestamp: new Date().toISOString()
         });
       }
 
-      if (callback) callback({ success: true, roomId: parsed.roomId });
+      if (callback) {
+        callback({ success: true, roomId: parsed.roomId });
+      } else {
+        socket.timeout(5000).emit('joinRoom', { success: true, roomId: parsed.roomId });
+      }
     } catch (err) {
       const error = err instanceof ZodError 
         ? { success: false, error: 'Validation error', details: err.issues }
@@ -73,7 +77,7 @@ export function handleLeaveRoom(socket: Socket) {
 
       const result = await roomStorage.removeMemberFromRoom(parsed.roomId, userUuid);
       
-      socket.to(parsed.roomId).emit('userLeft', {
+      socket.volatile.to(parsed.roomId).emit('userLeft', {
         userUuid,
         roomId: parsed.roomId,
         timestamp: new Date().toISOString()
@@ -90,7 +94,11 @@ export function handleLeaveRoom(socket: Socket) {
         return;
       }
 
-      if (callback) callback({ success: true, data: parsed });
+      if (callback) {
+        callback({ success: true, data: parsed });
+      } else {
+        socket.timeout(5000).emit('leaveRoom', { success: true, data: parsed });
+      }
     } catch (err) {
       const error = err instanceof ZodError 
         ? { success: false, error: 'Validation error', details: err.issues }
@@ -165,12 +173,12 @@ export function handleDynamicEvents(socket: Socket) {
             if (subscriber.includeSender) {
               socket.emit(eventName, eventData);
             }
-            socket.to(data.roomId).emit(eventName, eventData);
+            socket.compress(true).to(data.roomId).emit(eventName, eventData);
           } else {
             if (subscriber.includeSender) {
               socket.emit(eventName, eventData);
             }
-            socket.broadcast.emit(eventName, eventData);
+            socket.compress(true).broadcast.emit(eventName, eventData);
           }
         }
 
@@ -216,7 +224,7 @@ export function handleDisconnect(socket: Socket) {
         if (userUuid) {
           const result = await roomStorage.removeMemberFromRoom(roomId, userUuid, true);
           if (result.success) {
-            socket.to(roomId).emit('userLeft', {
+            socket.volatile.to(roomId).emit('userLeft', {
               userUuid,
               roomId,
               timestamp: new Date().toISOString(),

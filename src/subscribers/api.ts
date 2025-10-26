@@ -281,7 +281,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
 
         for (const socket of targetSockets) {
           if (socket) {
-            socket.emit(eventName, data);
+            socket.compress(true).emit(eventName, data);
           }
         }
         clientsCount = targetSockets.length;
@@ -290,9 +290,9 @@ export default async function subscriberApi(fastify: FastifyInstance) {
         const room = io.sockets.adapter.rooms.get(roomId);
         if (room) {
           if (includeSender) {
-            io.in(roomId).emit(eventName, data);
+            io.compress(true).in(roomId).emit(eventName, data);
           } else {
-            io.to(roomId).emit(eventName, data);
+            io.compress(true).to(roomId).emit(eventName, data);
           }
           clientsCount = room.size;
           targetInfo = `room ${roomId}`;
@@ -303,7 +303,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
           });
         }
       } else {
-        io.emit(eventName, data);
+        io.compress(true).emit(eventName, data);
         clientsCount = io.engine.clientsCount;
         targetInfo = 'all clients';
       }

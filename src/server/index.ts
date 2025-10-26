@@ -77,12 +77,23 @@ app.ready(async (err) => {
   reconnectionManager.setIO(app.io);
   
   app.io.on('connection', (socket: any) => {
+    const isRecovered = socket.recovered;
+    
     console.info('Socket connected!', {
       socketId: socket.id,
       userUuid: socket.data.userUuid,
       authenticated: socket.data.authenticated,
-      rooms: socket.rooms ? Array.from(socket.rooms) : []
+      rooms: socket.rooms ? Array.from(socket.rooms) : [],
+      recovered: isRecovered
     });
+    
+    if (isRecovered) {
+      console.info('Socket reconnected with recovery', { socketId: socket.id });
+      socket.emit('reconnected', {
+        socketId: socket.id,
+        timestamp: new Date().toISOString()
+      });
+    }
     
     socket.on('error', (error: Error) => {
       console.error('Socket error:', {
