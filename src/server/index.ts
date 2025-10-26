@@ -38,7 +38,12 @@ const app = fastify({
 app.register(cors, { origin: true });
 app.register(helmet, { contentSecurityPolicy: false });
 app.register(rateLimitPlugin);
-app.register(swaggerPlugin);
+
+// Only register Swagger in development mode
+if (process.env.NODE_ENV === 'development' || process.env.Debug === 'true') {
+  app.register(swaggerPlugin);
+}
+
 app.register(socketioServer);
 app.register(jwtApi);
 app.register(subscriberApi);

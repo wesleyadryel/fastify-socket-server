@@ -1,0 +1,32 @@
+volumes:
+  redis-socket-server:
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis_server
+    ports:
+      - "2456:6379"
+    volumes:
+      - redis-socket-server:/data
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      target: production
+      tags:
+        - fastify-socket-server:latest
+        - fastify-socket-server:1.0.0
+    image: fastify-socket-server:latest
+    container_name: fastify-socket-server
+    depends_on:
+      - redis
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=${REDIS_IP:-123.34.2.6}
+    ports:
+      - "3455:3000"
+    mem_limit: 4g
+    cpus: "4.0"
+    restart: unless-stopped
