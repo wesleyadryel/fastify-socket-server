@@ -1,31 +1,19 @@
-import { Redis } from 'ioredis';
 import { Room, RoomMember } from './types';
 import { storageConfig } from '../storage/config';
 import { Socket } from 'socket.io';
+import { getRedisConnection } from '../storage/redis-connection';
 
 class RoomStorage {
-  private redis: Redis | null = null;
   private useRedis: boolean = true;
   private localCache: Map<string, Room> = new Map();
   private roomMembersCache: Map<string, RoomMember[]> = new Map();
 
   constructor() {
     this.useRedis = storageConfig.useRedis;
+  }
 
-    if (this.useRedis) {
-      this.redis = new Redis({
-        host: storageConfig.redis.host,
-        port: storageConfig.redis.port,
-        password: storageConfig.redis.password,
-        db: storageConfig.redis.db,
-        maxRetriesPerRequest: 3,
-        lazyConnect: true
-      });
-
-      this.redis.on('error', (err) => {
-        console.error('Redis connection error in RoomStorage:', err);
-      });
-    }
+  private get redis() {
+    return getRedisConnection();
   }
 
   private getRoomKey(roomId: string): string {

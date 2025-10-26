@@ -1,6 +1,6 @@
-import Redis from 'ioredis';
 import { storageEvents } from './events';
 import { storageConfig } from './config';
+import { getRedisConnection } from './redis-connection';
 
 export interface StoredUser {
   socketId: string;
@@ -12,30 +12,16 @@ export interface StoredUser {
 }
 
 class RedisStorage {
-  private redis: Redis | null = null;
   private useRedis: boolean;
   private localCache = new Map<string, StoredUser>();
   private ttl = storageConfig.ttl;
 
   constructor() {
     this.useRedis = storageConfig.useRedis;
+  }
 
-    if (this.useRedis) {
-      this.redis = new Redis({
-        host: storageConfig.redis.host,
-        port: storageConfig.redis.port,
-        password: storageConfig.redis.password,
-        db: storageConfig.redis.db,
-        maxRetriesPerRequest: 3,
-        lazyConnect: true
-      });
-
-      this.redis.on('error', (err) => {
-        console.error('Redis connection error:', err);
-      });
-
-      this.redis.on('connect', () => { });
-    }
+  private get redis() {
+    return getRedisConnection();
   }
 
   private getJWTKey(jwtToken: string): string {
@@ -77,9 +63,8 @@ class RedisStorage {
           .expire(key, this.ttl)
           .set(socketToJWTKey, jwtToken, 'EX', this.ttl)
           .exec();
-
+        
         storageEvents.emitUserEvent(eventType, userData.socketId, identifiers.userUuid || '', identifiers);
-        await this.updateUserIndexes(userData);
       } catch (error) {
         console.error('Redis storage error:', error);
         this.localCache.set(jwtToken, userData);
@@ -139,8 +124,6 @@ class RedisStorage {
         }
         if (userData) {
           storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userUuid || '', userData.identifiers);
-        
-        await this.removeUserIndexes(userData);
         }
       } catch (error) {
         console.error('Redis removal error:', error);
@@ -216,25 +199,13 @@ class RedisStorage {
 
 
   async getUserBySocketIdFromCache(io: any, socketId: string): Promise<StoredUser | undefined> {
-    try {
-
-      const socket = io.sockets.sockets.get(socketId);
-      if (socket && socket.data && socket.data.authenticated) {
-
-        const user = await this.getUserByJWT(socket.data.token || '');
-        if (user) {
-
-          user.socketId = socket.id;
-          return user;
-        }
-      }
-      
-
-      return await this.getUserBySocketId(socketId);
-    } catch (error) {
-      console.error('Redis getUserBySocketIdFromCache error:', error);
-      return await this.getUserBySocketId(socketId);
+    const socket = io?.sockets?.sockets?.get(socketId);
+    
+    if (socket?.data?.authenticated && socket.data.token) {
+      return await this.getUserByJWT(socket.data.token);
     }
+
+    return await this.getUserBySocketId(socketId);
   }
 
   async getUserBySocketId(socketId: string): Promise<StoredUser | undefined> {
@@ -274,164 +245,18 @@ class RedisStorage {
       return [];
     }
 
-    return Array.from(this.localCache.values()).filter(user => {
-      for (const key in identifiers) {
-        if (identifiers.hasOwnProperty(key)) {
-          if (user.identifiers[key] !== identifiers[key]) {
-            return false;
-          }
-        }
-      }
-      return true;
+    // Buscar em todos os usuários do cache
+    const cachedUsers = Array.from(this.localCache.values());
+    
+    return cachedUsers.filter(user => {
+      return Object.entries(identifiers).every(([key, value]) => 
+        user.identifiers[key] === value
+      );
     });
   }
 
 
-  async getUsersByIdentifiersAdvanced(identifiers: Record<string, any>): Promise<StoredUser[]> {
-    if (this.useRedis && this.redis) {
-      try {
-        const keys = Object.keys(identifiers);
-        
 
-        if (keys.length === 1) {
-          const key = keys[0];
-          const value = identifiers[key];
-          
-          switch (key) {
-            case 'userUuid':
-              const jwtToken = await this.getUserTokenByUuid(value);
-              if (jwtToken) {
-                const user = await this.getUserByJWT(jwtToken);
-                return user ? [user] : [];
-              }
-              return [];
-              
-            default:
-              return Array.from(this.localCache.values()).filter(user => user.identifiers[key] === value);
-          }
-        }
-
-
-        const indexKeys: string[] = [];
-        const pipeline = this.redis.pipeline();
-        
-        for (const [key, value] of Object.entries(identifiers)) {
-          const indexKey = `user-index:${key}:${value}`;
-          indexKeys.push(indexKey);
-          pipeline.smembers(indexKey);
-        }
-        
-        const results = await pipeline.exec();
-        if (!results || results.length === 0) {
-          return Array.from(this.localCache.values()).filter(user => {
-            for (const [key, value] of Object.entries(identifiers)) {
-              if (user.identifiers[key] !== value) return false;
-            }
-            return true;
-          });
-        }
-
-
-        let intersection: string[] = [];
-        for (let i = 0; i < results.length; i++) {
-          const [err, userIds] = results[i] as [Error | null, string[]];
-          if (!err && userIds) {
-            if (i === 0) {
-              intersection = userIds;
-            } else {
-              intersection = intersection.filter(id => userIds.includes(id));
-            }
-          }
-        }
-
-
-        const users: StoredUser[] = [];
-        for (const userId of intersection) {
-          const jwtToken = await this.getUserTokenByUuid(userId);
-          if (jwtToken) {
-            const user = await this.getUserByJWT(jwtToken);
-            if (user) {
-
-              let matches = true;
-              for (const [key, value] of Object.entries(identifiers)) {
-                if (user.identifiers[key] !== value) {
-                  matches = false;
-                  break;
-                }
-              }
-              if (matches) {
-                users.push(user);
-              }
-            }
-          }
-        }
-
-        return users;
-      } catch (error) {
-        console.error('Redis getUsersByIdentifiersAdvanced error:', error);
-        return Array.from(this.localCache.values()).filter(user => {
-          for (const [key, value] of Object.entries(identifiers)) {
-            if (user.identifiers[key] !== value) return false;
-          }
-          return true;
-        });
-      }
-    } else {
-      return Array.from(this.localCache.values()).filter(user => {
-        for (const [key, value] of Object.entries(identifiers)) {
-          if (user.identifiers[key] !== value) return false;
-        }
-        return true;
-      });
-    }
-  }
-
-
-  private async updateUserIndexes(user: StoredUser): Promise<void> {
-    if (!this.useRedis || !this.redis) return;
-
-    try {
-      const pipeline = this.redis.pipeline();
-      
-
-      for (const [key, value] of Object.entries(user.identifiers)) {
-        if (value !== undefined && value !== null) {
-          const indexKey = `user-index:${key}:${value}`;
-          pipeline.sadd(indexKey, user.identifiers.userUuid || '');
-          pipeline.expire(indexKey, this.ttl);
-        }
-      }
-      
-      await pipeline.exec();
-    } catch (error) {
-      console.error('Redis updateUserIndexes error:', error);
-    }
-  }
-
-
-  private async removeUserIndexes(user: StoredUser): Promise<void> {
-    if (!this.useRedis || !this.redis) return;
-
-    try {
-      const pipeline = this.redis.pipeline();
-      
-
-      for (const [key, value] of Object.entries(user.identifiers)) {
-        if (value !== undefined && value !== null) {
-          const indexKey = `user-index:${key}:${value}`;
-          pipeline.srem(indexKey, user.identifiers.userUuid || '');
-        }
-      }
-      
-      await pipeline.exec();
-    } catch (error) {
-      console.error('Redis removeUserIndexes error:', error);
-    }
-  }
-
-  async getUserByJWTToken(jwtToken: string): Promise<StoredUser | undefined> {
-    return await this.getUserByJWT(jwtToken);
-  }
 
   async updateUserRooms(jwtToken: string, rooms: string[]): Promise<void> {
     const user = await this.getUserByJWT(jwtToken);
@@ -632,9 +457,8 @@ class RedisStorage {
   }
 
   async disconnect(): Promise<void> {
-    if (this.redis) {
-      await this.redis.quit();
-    }
+    // Redis connection is managed by singleton
+    // Individual storage classes don't need to handle it
   }
 }
 

@@ -272,7 +272,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
         const room = io.sockets.adapter.rooms.get(roomId);
         if (room) {
           if (includeSender) {
-            io.to(roomId).emit(eventName, data);
+            io.in(roomId).emit(eventName, data);
           } else {
             io.to(roomId).emit(eventName, data);
           }
@@ -285,11 +285,7 @@ export default async function subscriberApi(fastify: FastifyInstance) {
           });
         }
       } else {
-        if (includeSender) {
-          io.emit(eventName, data);
-        } else {
-          io.emit(eventName, data);
-        }
+        io.emit(eventName, data);
         clientsCount = io.sockets.sockets.size;
         targetInfo = 'all clients';
       }

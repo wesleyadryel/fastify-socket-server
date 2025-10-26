@@ -5,13 +5,6 @@ import { subscriberService } from '../subscribers';
 import { EventDataValidator } from '../subscribers/validation';
 import { roomStorage } from '../room';
 
-// Helper function to safely call callback
-function safeCallback(callback: (response: any) => void, response: any) {
-  if (callback && typeof callback === 'function') {
-    callback(response);
-  }
-}
-
 export function handleJoinRoom(socket: Socket) {
   socket.on('joinRoom', async (roomId: string, callback?: (response: any) => void) => {
     try {
@@ -19,31 +12,31 @@ export function handleJoinRoom(socket: Socket) {
       const userUuid = socket.data.userUuid;
 
       if (!userUuid) {
-        return safeCallback(callback!, { success: false, error: 'User not authenticated' });
+        callback?.({ success: false, error: 'User not authenticated' });
+        return;
       }
 
       const canJoinResult = await roomStorage.canUserJoinRoom(parsed.roomId, userUuid);
       if (!canJoinResult.canJoin) {
-        return safeCallback(callback!, {
-          success: false,
-          error: canJoinResult.reason || 'Cannot join room'
-        });
+        callback?.({ success: false, error: canJoinResult.reason || 'Cannot join room' });
+        return;
       }
 
       const isMember = await roomStorage.isUserInRoom(parsed.roomId, userUuid);
       if (!isMember) {
         const addResult = await roomStorage.addMemberToRoom(parsed.roomId, userUuid, socket);
         if (!addResult.success) {
-          return safeCallback(callback!, { success: false, error: addResult.message || 'Failed to add user to room' });
+          callback?.({ success: false, error: addResult.message || 'Failed to add user to room' });
+          return;
         }
       }
 
-      safeCallback(callback!, { success: true });
+      callback?.({ success: true });
     } catch (err) {
       if (err instanceof ZodError) {
-        safeCallback(callback!, { success: false, error: 'Validation error', details: err.issues });
+        callback?.({ success: false, error: 'Validation error', details: err.issues });
       } else {
-        safeCallback(callback!, { success: false, error: 'Invalid request' });
+        callback?.({ success: false, error: 'Invalid request' });
       }
     }
   });
@@ -56,15 +49,17 @@ export function handleLeaveRoom(socket: Socket) {
       const userUuid = socket.data.userUuid;
 
       if (!userUuid) {
-        return safeCallback(callback!, { success: false, error: 'User not authenticated' });
+        callback?.({ success: false, error: 'User not authenticated' });
+        return;
       }
 
       const result = await roomStorage.removeMemberFromRoom(parsed.roomId, userUuid);
       if (!result.success) {
-        return safeCallback(callback!, { success: false, error: result.reason || 'Failed to remove user from room' });
+        callback?.({ success: false, error: result.reason || 'Failed to remove user from room' });
+        return;
       }
 
-      safeCallback(callback!, { success: true, data: parsed });
+      callback?.({ success: true, data: parsed });
       socket.leave(parsed.roomId);
       socket.to(parsed.roomId).emit('userLeft', {
         userUuid: userUuid,
@@ -72,9 +67,9 @@ export function handleLeaveRoom(socket: Socket) {
       });
     } catch (err) {
       if (err instanceof ZodError) {
-        safeCallback(callback!, { success: false, error: 'Validation error', details: err.issues });
+        callback?.({ success: false, error: 'Validation error', details: err.issues });
       } else {
-        safeCallback(callback!, { success: false, error: 'Invalid request' });
+        callback?.({ success: false, error: 'Invalid request' });
       }
     }
   });
@@ -92,7 +87,8 @@ export function handleDynamicEvents(socket: Socket) {
       const subscribers = subscriberService.getSubscribersByEvent(eventName);
 
       if (subscribers.length === 0) {
-        return safeCallback(callback!, { success: false, error: `No subscribers found for event: ${eventName}` });
+        callback?.({ success: false, error: `No subscribers found for event: ${eventName}` });
+        return;
       }
 
       const results = subscribers.map(subscriber => {
@@ -110,7 +106,7 @@ export function handleDynamicEvents(socket: Socket) {
             try {
               sanitizedData = EventDataValidator.validateAndSanitizeData(data, subscriber.parameters);
             } catch (validationError: any) {
-              safeCallback(callback!, {
+              callback?.({
                 success: false,
                 error: `Validation failed: ${validationError.message}`,
                 subscriberId: subscriber.id
@@ -142,7 +138,7 @@ export function handleDynamicEvents(socket: Socket) {
         return result;
       });
 
-      safeCallback(callback!, {
+      callback?.({
         success: true,
         data: {
           event: eventName,
@@ -151,7 +147,7 @@ export function handleDynamicEvents(socket: Socket) {
       });
 
     } catch (err) {
-      safeCallback(callback!, { success: false, error: 'Event processing failed' });
+      callback?.({ success: false, error: 'Event processing failed' });
     }
   });
 }
