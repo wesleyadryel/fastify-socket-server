@@ -37,7 +37,7 @@ export const authMiddleware = async (
   try {
     const payload = jwtManager.verify(token);
     
-    if (!payload || typeof payload !== 'object' || !payload.userId) {
+    if (!payload || typeof payload !== 'object' || !payload.identifiers?.userId) {
       throw new Error('Invalid payload');
     }
 
@@ -48,14 +48,14 @@ export const authMiddleware = async (
     
     socket.data.authenticated = true;
     socket.data.token = token;
-    socket.data.identifiers = payload.identifiers || { userId: payload.userId };
+    socket.data.identifiers = payload.identifiers;
     socket.data.userUuid = payload.identifiers?.userUuid;
     
     redisStorage.updateUser(
       token,
       socket.id,
       true,
-      payload.identifiers || { userId: payload.userId },
+      payload.identifiers,
       []
     );
 

@@ -9,9 +9,8 @@ if (!JWT_SECRET) {
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '999y';
 
 export interface JwtPayload {
-  userId: string;
-  identifiers?: {
-    userId?: string;
+  identifiers: {
+    userId: string;
     userSource?: string;
     [key: string]: any;
   };

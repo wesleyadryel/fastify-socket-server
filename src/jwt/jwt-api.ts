@@ -63,15 +63,14 @@ export default async function jwtApi(fastify: FastifyInstance) {
         userUuid = generateUserUuid();
       }
 
-      const payload: any = {
-        userId,
-        userUuid: userUuid
-      };
-
-      payload.identifiers = {
+      const identifiersObj: any = {
         userId,
         userUuid: userUuid,
         ...identifiers
+      };
+
+      const payload: any = {
+        identifiers: identifiersObj
       };
 
       const token = jwtManager.sign(payload);
@@ -80,7 +79,7 @@ export default async function jwtApi(fastify: FastifyInstance) {
         token,
         storageConfig.tempSocketId,
         true,
-        payload.identifiers,
+        identifiersObj,
         []
       );
 
