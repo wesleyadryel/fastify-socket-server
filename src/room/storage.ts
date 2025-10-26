@@ -5,8 +5,6 @@ import { getRedisConnection } from '../storage/redis-connection';
 
 class RoomStorage {
   private useRedis: boolean = true;
-  private localCache: Map<string, Room> = new Map();
-  private roomMembersCache: Map<string, RoomMember[]> = new Map();
 
   constructor() {
     this.useRedis = storageConfig.useRedis;
@@ -43,17 +41,14 @@ class RoomStorage {
         await this.redis.expire(roomKey, 86400 * 30);
       } catch (error) {
         console.error('Redis storage error:', error);
-        this.localCache.set(room.id, room);
+        throw error;
       }
-    } else {
-      this.localCache.set(room.id, room);
     }
   }
 
   async getRoom(roomId: string): Promise<Room | null> {
     if (this.useRedis && this.redis) {
       try {
-
         const roomKey = this.getRoomKey(roomId);
         const roomData = await this.redis.hgetall(roomKey);
 
@@ -74,11 +69,10 @@ class RoomStorage {
         };
       } catch (error) {
         console.error('Redis get room error:', error);
-        return this.localCache.get(roomId) || null;
+        return null;
       }
-    } else {
-      return this.localCache.get(roomId) || null;
     }
+    return null;
   }
 
   async updateRoom(roomId: string, updates: Partial<Room>): Promise<boolean> {
@@ -104,20 +98,16 @@ class RoomStorage {
         return true;
       } catch (error) {
         console.error('Redis update room error:', error);
-        this.localCache.set(roomId, updatedRoom);
-        return true;
+        return false;
       }
-    } else {
-      this.localCache.set(roomId, updatedRoom);
-      return true;
     }
+    return false;
   }
 
   async deleteRoom(roomId: string): Promise<boolean> {
     if (this.useRedis && this.redis) {
       try {
         const roomKey = this.getRoomKey(roomId);
-
         await this.redis.del(roomKey);
         await this.redis.del(this.getRoomMembersKey(roomId));
         return true;
@@ -125,28 +115,57 @@ class RoomStorage {
         console.error('Redis delete room error:', error);
         return false;
       }
-    } else {
-      this.localCache.delete(roomId);
-      this.roomMembersCache.delete(roomId);
-      return true;
     }
+    return false;
   }
 
-  getAllRoomsFromSocket(io: any): Room[] {
+  async getAllRoomsFromSocket(io: any): Promise<Room[]> {
     const rooms: Room[] = [];
     const socketRooms = io.sockets.adapter.rooms;
     
     for (const [roomId, sockets] of socketRooms) {
-      const room = this.localCache.get(roomId);
-      if (room) {
-        const currentMembers = Array.from(sockets).map(socketId => {
-          const socket = io.sockets.sockets.get(socketId);
-          return socket?.data?.identifiers?.userUuid || '';
-        }).filter(Boolean);
-        
+      if (roomId === io.sockets.id || roomId.startsWith('/')) {
+        continue;
+      }
+      
+      const currentMembers = Array.from(sockets).map(socketId => {
+        const socket = io.sockets.sockets.get(socketId);
+        return socket?.data?.userUuid || socket?.data?.identifiers?.userUuid || '';
+      }).filter(Boolean);
+      
+      if (this.useRedis && this.redis) {
+        try {
+          const room = await this.getRoom(roomId);
+          if (room) {
+            rooms.push({
+              ...room,
+              members: currentMembers.length > 0 ? currentMembers : room.members
+            });
+          } else {
+            rooms.push({
+              id: roomId,
+              name: roomId,
+              description: '',
+              allowSelfJoin: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              members: currentMembers,
+              isPrivate: false
+            });
+          }
+        } catch (error) {
+          console.error('Error getting room from Redis:', error);
+        }
+      } else {
         rooms.push({
-          ...room,
-          members: currentMembers.length > 0 ? currentMembers : room.members
+          id: roomId,
+          name: roomId,
+          description: '',
+          allowSelfJoin: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          members: currentMembers,
+          isPrivate: false
         });
       }
     }
@@ -190,10 +209,6 @@ class RoomStorage {
         } catch (error) {
           console.error('Redis add member error:', error);
         }
-      } else {
-        const members = this.roomMembersCache.get(roomId) || [];
-        members.push(member);
-        this.roomMembersCache.set(roomId, members);
       }
 
 
@@ -230,10 +245,6 @@ class RoomStorage {
         } catch (error) {
           console.error('Redis remove member error:', error);
         }
-      } else {
-        const members = this.roomMembersCache.get(roomId) || [];
-        const updatedMembersList = members.filter(member => member.userUuid !== userUuid);
-        this.roomMembersCache.set(roomId, updatedMembersList);
       }
     }
 
@@ -245,15 +256,13 @@ class RoomStorage {
       try {
         const membersKey = this.getRoomMembersKey(roomId);
         const membersData = await this.redis.hgetall(membersKey);
-
         return Object.values(membersData).map(memberJson => JSON.parse(memberJson));
       } catch (error) {
         console.error('Redis get room members error:', error);
-        return this.roomMembersCache.get(roomId) || [];
+        return [];
       }
-    } else {
-      return this.roomMembersCache.get(roomId) || [];
     }
+    return [];
   }
 
   async isUserInRoom(roomId: string, userUuid: string): Promise<boolean> {
