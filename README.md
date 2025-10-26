@@ -1065,4 +1065,4 @@ ADMIN_ALLOWED_IPS=203.0.113.5,198.51.100.10
 - In production, **always use authentication** for security
 - Production mode reduces memory usage by limiting socket/room details
 - **Redis Store**: If Redis is configured, Admin UI uses Redis for session storage instead of in-memory, allowing sessions to persist across server restarts
-- **IP Security**: By default, only private network IPs (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x) can access. Set `ADMIN_ALLOWED_IPS` to allow specific external IPs
+- **IP Security**: By default, only private network IPs are allowed. The validation uses the `ip` library which detects all RFC 1918 private address ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x, etc.). Set `ADMIN_ALLOWED_IPS` to allow specific external IPs

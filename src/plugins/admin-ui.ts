@@ -3,26 +3,7 @@ import { instrument, RedisStore } from '@socket.io/admin-ui';
 import { hashSync } from 'bcryptjs';
 import { getRedisConnection } from '../storage/redis-connection';
 import { Log } from '../utils/log';
-
-const isPrivateIP = (ip: string): boolean => {
-  if (!ip) return false;
-  
-  const parts = ip.split('.').map(Number);
-  
-  if (parts.length !== 4 || parts.some(isNaN)) return false;
-  
-  if (parts[0] === 10) return true;
-  
-  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-  
-  if (parts[0] === 192 && parts[1] === 168) return true;
-  
-  if (parts[0] === 127) return true;
-  
-  if (parts[0] === 169 && parts[1] === 254) return true;
-  
-  return false;
-};
+import * as ip from 'ip';
 
 const getClientIP = (socket: any): string => {
   const req = socket.request;
@@ -38,19 +19,26 @@ const getClientIP = (socket: any): string => {
 const createAdminUIMiddleware = (allowedIPs: string[]) => {
   return (socket: any, next: any) => {
     const clientIP = getClientIP(socket);
+    if(!clientIP) return next(new Error('This connection was not authorized'));
     
-    const hasAccess = allowedIPs.length === 0 ||
-      isPrivateIP(clientIP) ||
-      allowedIPs.includes(clientIP) ||
-      allowedIPs.some(allowedIP => clientIP.startsWith(allowedIP));
+    try {
+      const isPrivate = ip.isPrivate(clientIP);      
+      const hasAccess = allowedIPs.length === 0 ||
+        isPrivate ||
+        allowedIPs.includes(clientIP) ||
+        allowedIPs.some(allowedIP => clientIP.startsWith(allowedIP));
 
-    if (!hasAccess) {
-      Log.log('Admin UI access blocked', { ip: clientIP });
+      if (!hasAccess) {
+        Log.log('Admin UI access blocked', { ip: clientIP });
+        return next(new Error('This connection was not authorized'));
+      }
+      
+      Log.log('Admin UI access granted', { ip: clientIP });
+      next();
+    } catch (error) {
+      Log.log('Admin UI access blocked - invalid IP', { ip: clientIP });
       return next(new Error('This connection was not authorized'));
     }
-    
-    Log.log('Admin UI access granted', { ip: clientIP });
-    next();
   };
 };
 
@@ -92,8 +80,7 @@ export const setupAdminUI = (io: Server): void => {
   Log.log('Socket.IO Admin UI enabled', {
     mode: isProduction ? 'production' : 'development',
     auth: hasAdminAuth ? 'enabled' : 'disabled',
-    store: redisClient ? 'redis' : 'in-memory',
-    ipRestriction: allowedIPs.length > 0 ? `allowed IPs: ${allowedIPs.join(', ')}` : 'local network only'
+    store: redisClient ? 'redis' : 'in-memory'
   });
 };
 
