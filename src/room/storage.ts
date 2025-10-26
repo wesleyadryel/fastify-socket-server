@@ -22,7 +22,6 @@ class RoomStorage {
     return `${storageConfig.roomKeyPrefix}:${roomId}:members`;
   }
 
-
   async createRoom(room: Room): Promise<void> {
     if (this.useRedis && this.redis) {
       try {
@@ -40,7 +39,6 @@ class RoomStorage {
         });
         await this.redis.expire(roomKey, 86400 * 30);
       } catch (error) {
-        console.error('Redis storage error:', error);
         throw error;
       }
     }
@@ -68,7 +66,6 @@ class RoomStorage {
           members: JSON.parse(roomData.members || '[]')
         };
       } catch (error) {
-        console.error('Redis get room error:', error);
         return null;
       }
     }
@@ -97,7 +94,6 @@ class RoomStorage {
         });
         return true;
       } catch (error) {
-        console.error('Redis update room error:', error);
         return false;
       }
     }
@@ -112,7 +108,6 @@ class RoomStorage {
         await this.redis.del(this.getRoomMembersKey(roomId));
         return true;
       } catch (error) {
-        console.error('Redis delete room error:', error);
         return false;
       }
     }
@@ -120,59 +115,68 @@ class RoomStorage {
   }
 
   async getAllRoomsFromSocket(io: any): Promise<Room[]> {
-    const rooms: Room[] = [];
-    const socketRooms = io.sockets.adapter.rooms;
+    const socketRooms = this.getValidRooms(io.sockets.adapter.rooms, io);
+
+    const rooms = await Promise.all(
+      socketRooms.map(([roomId, sockets]) => 
+        this.buildRoomData(roomId, sockets, io)
+      )
+    );
     
-    for (const [roomId, sockets] of socketRooms) {
-      if (roomId === io.sockets.id || roomId.startsWith('/')) {
-        continue;
-      }
-      
-      const currentMembers = Array.from(sockets).map(socketId => {
-        const socket = io.sockets.sockets.get(socketId);
-        return socket?.data?.userUuid || socket?.data?.identifiers?.userUuid || '';
-      }).filter(Boolean);
-      
-      if (this.useRedis && this.redis) {
-        try {
-          const room = await this.getRoom(roomId);
-          if (room) {
-            rooms.push({
-              ...room,
-              members: currentMembers.length > 0 ? currentMembers : room.members
-            });
-          } else {
-            rooms.push({
-              id: roomId,
-              name: roomId,
-              description: '',
-              allowSelfJoin: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              members: currentMembers,
-              isPrivate: false
-            });
-          }
-        } catch (error) {
-          console.error('Error getting room from Redis:', error);
-        }
-      } else {
-        rooms.push({
-          id: roomId,
-          name: roomId,
-          description: '',
-          allowSelfJoin: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          members: currentMembers,
-          isPrivate: false
-        });
-      }
-    }
-    
-    return rooms;
+    return rooms.filter(room => room !== null) as Room[];
   }
 
+  private getValidRooms(adapterRooms: Map<string, Set<string>>, io: any): Array<[string, Set<string>]> {
+    return Array.from(adapterRooms.entries())
+      .filter(([roomId]) => this.isValidRoom(roomId, io));
+  }
+
+  private isValidRoom(roomId: string, io: any): boolean {
+    return roomId !== io.sockets.id && !roomId.startsWith('/');
+  }
+
+  private async buildRoomData(roomId: string, sockets: Set<string>, io: any): Promise<Room | null> {
+    const currentMembers = this.extractMembers(sockets, io);
+    
+    if (!this.useRedis || !this.redis) {
+      return this.createTempRoom(roomId, currentMembers);
+    }
+    
+    try {
+      const room = await this.getRoom(roomId);
+      if (room) {
+        return {
+          ...room,
+          members: currentMembers.length > 0 ? currentMembers : room.members
+        };
+      }
+      return this.createTempRoom(roomId, currentMembers);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private extractMembers(sockets: Set<string>, io: any): string[] {
+    return Array.from(sockets)
+      .map(socketId => {
+        const socket = io.sockets.sockets.get(socketId);
+        return socket?.data?.userUuid || socket?.data?.identifiers?.userUuid || '';
+      })
+      .filter(Boolean);
+  }
+
+  private createTempRoom(roomId: string, members: string[]): Room {
+    return {
+      id: roomId,
+      name: roomId,
+      description: '',
+      allowSelfJoin: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      members,
+      isPrivate: false
+    };
+  }
 
   async addMemberToRoom(roomId: string, userUuid: string, socket?: Socket): Promise<{ success: boolean; message?: string }> {
     const room = await this.getRoom(roomId);
@@ -207,10 +211,8 @@ class RoomStorage {
           await this.redis.hset(membersKey, userUuid, JSON.stringify(member));
           await this.redis.expire(membersKey, 86400 * 30);
         } catch (error) {
-          console.error('Redis add member error:', error);
         }
       }
-
 
       if (socket) {
         socket.join(roomId);
@@ -243,7 +245,6 @@ class RoomStorage {
           const membersKey = this.getRoomMembersKey(roomId);
           await this.redis.hdel(membersKey, userUuid);
         } catch (error) {
-          console.error('Redis remove member error:', error);
         }
       }
     }
@@ -258,7 +259,6 @@ class RoomStorage {
         const membersData = await this.redis.hgetall(membersKey);
         return Object.values(membersData).map(memberJson => JSON.parse(memberJson));
       } catch (error) {
-        console.error('Redis get room members error:', error);
         return [];
       }
     }
