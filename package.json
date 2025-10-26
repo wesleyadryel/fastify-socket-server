@@ -9,7 +9,7 @@
     "build": "npx esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --target=node20 --external:socket.io",
     "build:watch": "npx esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --target=node20 --external:socket.io --watch",
     "start": "node dist/index.js",
-    "dev": "npx ts-node src/index.ts",
+    "dev": "cross-env NODE_ENV=development npx ts-node src/index.ts",
     "dev:log": "cross-env Debug=true ts-node src/index.ts",
     "clean": "rimraf dist",
     "test": "jest",
