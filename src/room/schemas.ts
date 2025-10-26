@@ -13,7 +13,7 @@ export const roomSchemas = {
         allowSelfJoin: { type: 'boolean', description: 'Allow users to join without approval' },
         maxMembers: { type: 'number', description: 'Maximum number of members' },
         isPrivate: { type: 'boolean', description: 'Is room private' },
-        userId: { type: 'string', description: 'User ID for room creator (optional)' }
+        userUuid: { type: 'string', description: 'User UUID for room creator (optional)' }
       },
       required: ['name']
     },
@@ -68,6 +68,13 @@ export const roomSchemas = {
     description: 'Get all rooms',
     summary: 'Get All Rooms',
     tags: ['Room Management'],
+    querystring: {
+      type: 'object',
+      properties: {
+        userUuid: { type: 'string', description: 'User UUID' }
+      },
+      required: ['userUuid']
+    },
     response: {
       200: {
         type: 'object',
@@ -106,6 +113,13 @@ export const roomSchemas = {
         roomId: { type: 'string', description: 'Room ID' }
       },
       required: ['roomId']
+    },
+    querystring: {
+      type: 'object',
+      properties: {
+        userUuid: { type: 'string', description: 'User UUID' }
+      },
+      required: ['userUuid']
     },
     response: {
       200: {
@@ -150,8 +164,10 @@ export const roomSchemas = {
         description: { type: 'string', description: 'Room description' },
         allowSelfJoin: { type: 'boolean', description: 'Allow users to join without approval' },
         maxMembers: { type: 'number', description: 'Maximum number of members' },
-        isPrivate: { type: 'boolean', description: 'Is room private' }
-      }
+        isPrivate: { type: 'boolean', description: 'Is room private' },
+        userUuid: { type: 'string', description: 'User UUID' }
+      },
+      required: ['userUuid']
     },
     response: {
       200: {
@@ -189,6 +205,13 @@ export const roomSchemas = {
       },
       required: ['roomId']
     },
+    body: {
+      type: 'object',
+      properties: {
+        userUuid: { type: 'string', description: 'User UUID' }
+      },
+      required: ['userUuid']
+    },
     response: {
       200: {
         type: 'object',
@@ -211,6 +234,18 @@ export const roomSchemas = {
       },
       required: ['roomId']
     },
+    body: {
+      type: 'object',
+      properties: {
+        userUuid: { type: 'string', description: 'User UUID' },
+        forceCreate: { 
+          type: 'boolean', 
+          description: 'Force create room if it does not exist',
+          default: false
+        }
+      },
+      required: ['userUuid']
+    },
     response: {
       200: {
         type: 'object',
@@ -221,7 +256,7 @@ export const roomSchemas = {
             items: {
               type: 'object',
               properties: {
-                userId: { type: 'string' },
+                userUuid: { type: 'string' },
                 joinedAt: { type: 'string' },
                 role: { type: 'string', enum: ['admin', 'member'] }
               }
@@ -246,9 +281,14 @@ export const roomSchemas = {
     body: {
       type: 'object',
       properties: {
-        userId: { type: 'string', description: 'User ID to add' }
+        userUuid: { type: 'string', description: 'User UUID to add' },
+        forceCreate: { 
+          type: 'boolean', 
+          description: 'Force create room if it does not exist',
+          default: false
+        }
       },
-      required: ['userId']
+      required: ['userUuid']
     },
     response: {
       200: {
@@ -269,9 +309,9 @@ export const roomSchemas = {
       type: 'object',
       properties: {
         roomId: { type: 'string', description: 'Room ID' },
-        userId: { type: 'string', description: 'User ID to remove' }
+        userUuid: { type: 'string', description: 'User UUID to remove' }
       },
-      required: ['roomId', 'userId']
+      required: ['roomId', 'userUuid']
     },
     response: {
       200: {
@@ -294,6 +334,13 @@ export const roomSchemas = {
         roomId: { type: 'string', description: 'Room ID' }
       },
       required: ['roomId']
+    },
+    body: {
+      type: 'object',
+      properties: {
+        userUuid: { type: 'string', description: 'User UUID' }
+      },
+      required: ['userUuid']
     },
     response: {
       200: {

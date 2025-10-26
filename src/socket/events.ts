@@ -29,10 +29,10 @@ export function handleJoinRoom(socket: Socket) {
 
       const isMember = await roomStorage.isUserInRoom(parsed.roomId, userUuid);
       if (!isMember) {
-        const added = await roomStorage.addMemberToRoom(parsed.roomId, userUuid, socket);
-        if (!added) {
+        const addResult = await roomStorage.addMemberToRoom(parsed.roomId, userUuid, socket);
+        if (!addResult.success) {
           if (callback) {
-            callback({ success: false, error: 'Failed to add user to room' });
+            callback({ success: false, error: addResult.message || 'Failed to add user to room' });
           }
           return;
         }

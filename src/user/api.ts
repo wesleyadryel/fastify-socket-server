@@ -368,7 +368,7 @@ export default async function userApi(fastify: FastifyInstance) {
         success: true,
         isConnected: isConnected,
         socketId: existSocket ? (socket?.id || userData?.socketId || null) : undefined,
-        userData: userData,
+        userData: {...userData, rooms: undefined},
         rooms: rooms
       };
     } catch (error: any) {

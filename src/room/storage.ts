@@ -178,25 +178,32 @@ class RoomStorage {
     }
   }
 
-  async addMemberToRoom(roomId: string, userId: string, socket?: Socket): Promise<boolean> {
+  async addMemberToRoom(roomId: string, userId: string, socket?: Socket): Promise<{ success: boolean; message?: string }> {
     const room = await this.getRoom(roomId);
     if (!room) {
-      return false;
+      console.log('room not found', roomId);
+      return { success: false, message: 'Room not found' };
     }
 
-    if (room.maxMembers && room.members.length >= room.maxMembers) {
-      return false;
+    if (room.maxMembers && (room.members.length >= room.maxMembers)) {
+      return { success: false, message: 'Room is full' };
     }
 
     if (room.members.includes(userId)) {
-      return true; // Already a member
+      if (socket) {
+        socket.join(roomId);
+        socket.to(roomId).emit('userJoined', {
+          userUuid: userId,
+          roomId: roomId,
+        });
+      }
+      return { success: true, message: 'User is already a member' };
     }
 
     const updatedMembers = [...room.members, userId];
     const success = await this.updateRoom(roomId, { members: updatedMembers });
 
     if (success) {
-      // Store member details
       const member: RoomMember = {
         userId,
         joinedAt: new Date().toISOString(),
@@ -217,6 +224,7 @@ class RoomStorage {
         this.roomMembersCache.set(roomId, members);
       }
 
+
       if (socket) {
         socket.join(roomId);
         socket.to(roomId).emit('userJoined', {
@@ -226,7 +234,7 @@ class RoomStorage {
       }
     }
 
-    return success;
+    return { success, message: success ? 'Member added successfully' : 'Failed to add member' };
   }
 
   async removeMemberFromRoom(roomId: string, userId: string, forceRemove: boolean = false): Promise<{ success: boolean; reason?: string }> {
