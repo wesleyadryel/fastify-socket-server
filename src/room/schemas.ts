@@ -1,4 +1,3 @@
-// Room API Schemas
 export const roomSchemas = {
   createRoom: {
     description: 'Create a new room',

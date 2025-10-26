@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { redisStorage, getSocketClientByUuid } from '../storage/redis';
 import { getUserQuerySchema, deleteUserBodySchema, getUserByTokenParamsSchema, getSocketClientQuerySchema } from '../validation/zod-schemas';
 import { ZodError } from 'zod';
+import { userSchemas } from './schemas';
 
 async function authGuard(request: FastifyRequest, reply: FastifyReply) {  
   const authHeader = request.headers['authorization'];
@@ -22,23 +23,7 @@ export default async function userApi(fastify: FastifyInstance) {
 
 
   fastify.get('/user/token/:token', {
-    schema: {
-      summary: 'Get user data by JWT token (path parameter)',
-      tags: ['User Management'],
-      params: {
-        type: 'object',
-        properties: {
-          token: { type: 'string' }
-        },
-        required: ['token']
-      },
-      response: {
-        200: {
-          type: 'object',
-          additionalProperties: true
-        }
-      }
-    }
+    schema: userSchemas.getUserByToken
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { token } = getUserByTokenParamsSchema.parse(request.params);
@@ -73,33 +58,7 @@ export default async function userApi(fastify: FastifyInstance) {
 
   fastify.get('/user', {
     preHandler: [authGuard],
-    schema: {
-      description: 'Get user data by query parameters (token, userId, or userSource)',
-      summary: 'Get User Data',
-      tags: ['User Management'],
-      querystring: {
-        type: 'object',
-        properties: {
-          token: { type: 'string' },
-          userId: { type: 'string' },
-          userSource: { type: 'string' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          additionalProperties: true
-        },
-        400: {
-          type: 'object',
-          additionalProperties: true
-        },
-        404: {
-          type: 'object',
-          additionalProperties: true
-        }
-      }
-    }
+    schema: userSchemas.getUser
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validar query parameters usando Zod
@@ -163,34 +122,7 @@ export default async function userApi(fastify: FastifyInstance) {
 
   fastify.delete('/user', {
     preHandler: [authGuard],
-    schema: {
-      description: 'Disconnect user and remove from Redis by body parameters (token, userId, or userSource)',
-      summary: 'Disconnect User',
-      tags: ['User Management'],
-      body: {
-        type: 'object',
-        properties: {
-          token: { type: 'string' },
-          userId: { type: 'string' },
-          userSource: { type: 'string' },
-          userUuid: { type: 'string' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          additionalProperties: true
-        },
-        400: {
-          type: 'object',
-          additionalProperties: true
-        },
-        404: {
-          type: 'object',
-          additionalProperties: true
-        }
-      }
-    }
+    schema: userSchemas.deleteUser
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = deleteUserBodySchema.parse(request.body);
@@ -276,37 +208,7 @@ export default async function userApi(fastify: FastifyInstance) {
 
   fastify.get('/socket-client', {
     preHandler: [authGuard],
-    schema: {
-      description: 'Get socket client object by user UUID using direct Redis lookup',
-      summary: 'Get Socket Client by UUID',
-      tags: ['User Management'],
-      querystring: {
-        type: 'object',
-        properties: {
-          userUuid: { type: 'string' }
-        },
-        required: ['userUuid']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            socketId: { type: ['string', 'null'] },
-            isConnected: { type: 'boolean' },
-            rooms: { type: 'array', items: { type: 'string' } },
-            userData: { type: 'object', additionalProperties: true }
-          }
-        },
-        404: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        }
-      }
-    }
+    schema: userSchemas.getSocketClient
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userUuid } = getSocketClientQuerySchema.parse(request.query);
