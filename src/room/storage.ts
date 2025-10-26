@@ -35,16 +35,11 @@ class RoomStorage {
     return `${storageConfig.roomKeyPrefix}:${roomId}:members`;
   }
 
-  private getRoomsListKey(): string {
-    return `${storageConfig.roomKeyPrefix}s:list`;
-  }
 
   async createRoom(room: Room): Promise<void> {
     if (this.useRedis && this.redis) {
       try {
         const roomKey = this.getRoomKey(room.id);
-        const roomsListKey = this.getRoomsListKey();
-        
         await this.redis.hset(roomKey, {
           id: room.id,
           name: room.name,
@@ -57,8 +52,6 @@ class RoomStorage {
           isPrivate: room.isPrivate.toString(),
           members: JSON.stringify(room.members)
         });
-
-        await this.redis.sadd(roomsListKey, room.id);
         await this.redis.expire(roomKey, 86400 * 30); // 30 days
       } catch (error) {
         console.error('Redis storage error:', error);
@@ -72,6 +65,7 @@ class RoomStorage {
   async getRoom(roomId: string): Promise<Room | null> {
     if (this.useRedis && this.redis) {
       try {
+        
         const roomKey = this.getRoomKey(roomId);
         const roomData = await this.redis.hgetall(roomKey);
         
@@ -136,10 +130,8 @@ class RoomStorage {
     if (this.useRedis && this.redis) {
       try {
         const roomKey = this.getRoomKey(roomId);
-        const roomsListKey = this.getRoomsListKey();
         
         await this.redis.del(roomKey);
-        await this.redis.srem(roomsListKey, roomId);
         await this.redis.del(this.getRoomMembersKey(roomId));
         return true;
       } catch (error) {
@@ -156,16 +148,25 @@ class RoomStorage {
   async getAllRooms(): Promise<Room[]> {
     if (this.useRedis && this.redis) {
       try {
-        const roomsListKey = this.getRoomsListKey();
-        const roomIds = await this.redis.smembers(roomsListKey);
-        
+        const pattern = `${storageConfig.roomKeyPrefix}:*`;
         const rooms: Room[] = [];
-        for (const roomId of roomIds) {
-          const room = await this.getRoom(roomId);
-          if (room) {
-            rooms.push(room);
+        let cursor = '0';
+        
+        do {
+          const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+          cursor = result[0];
+          const keys = result[1];
+          
+          for (const key of keys) {
+            if (!key.includes(':members')) {
+              const room = await this.getRoom(key.replace(`${storageConfig.roomKeyPrefix}:`, ''));
+              if (room) {
+                rooms.push(room);
+              }
+            }
           }
-        }
+        } while (cursor !== '0');
+        
         return rooms;
       } catch (error) {
         console.error('Redis get all rooms error:', error);
@@ -274,7 +275,7 @@ class RoomStorage {
   async canUserJoinRoom(roomId: string, userId: string): Promise<{ canJoin: boolean; reason?: string }> {
     const room = await this.getRoom(roomId);
     if (!room) {
-      return { canJoin: false, reason: 'Room not found' };
+      return { canJoin: false, reason: `Room ${roomId} not found` };
     }
 
     if (room.members.includes(userId)) {

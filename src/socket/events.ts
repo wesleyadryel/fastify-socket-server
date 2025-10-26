@@ -39,7 +39,7 @@ export function handleJoinRoom(socket: Socket) {
       }
 
       if (callback) {
-        callback({ success: true, data: parsed });
+        callback({ success: true });
       }
       socket.join(parsed.roomId);
       socket.to(parsed.roomId).emit('userJoined', {

@@ -1,93 +1,56 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { roomStorage } from './storage';
 import { Room, CreateRoomData, UpdateRoomData } from './types';
-import { 
-  createRoomSchema, 
-  updateRoomSchema, 
-  roomIdSchema, 
-  addMemberSchema, 
-  removeMemberSchema,
-  getRoomMembersSchema 
-} from './validation';
-import { jwtManager } from '../jwt';
-import { fastifyZodPreHandler } from '../validation/zod-utils';
+import { roomSchemas } from './schemas';
 
-async function jwtAuthGuard(request: FastifyRequest, reply: FastifyReply) {
+async function authGuard(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    reply.code(401).send({ error: 'Token not provided' });
-    return;
+    return reply.status(401).send({ error: 'Token not provided' });
   }
-  
   const token = authHeader.split(' ')[1];
-  
-  try {
-    const payload = jwtManager.verify(token);
-    
-    if (!payload || typeof payload !== 'object' || !payload.userId) {
-      reply.code(401).send({ error: 'Invalid token payload' });
-      return;
-    }
-
-    // Add user to request object
-    (request as any).user = {
-      userId: payload.userId,
-      ...payload.identifiers
-    };
-  } catch (error) {
-    reply.code(401).send({ error: 'Invalid or expired token' });
-    return;
+  const API_TOKEN = process.env.API_TOKEN;
+  if (!API_TOKEN) {
+    return reply.status(500).send({ error: 'API_TOKEN not configured on server' });
+  }
+  if (token !== API_TOKEN) {
+    return reply.status(401).send({ error: 'Invalid or expired token' });
   }
 }
 
 export default async function roomApi(fastify: FastifyInstance) {
   fastify.post('/rooms', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Create a new room',
-      summary: 'Create Room',
-      tags: ['Room Management'],
-      body: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Room name' },
-          description: { type: 'string', description: 'Room description' },
-          allowSelfJoin: { type: 'boolean', description: 'Allow users to join without approval' },
-          maxMembers: { type: 'number', description: 'Maximum number of members' },
-          isPrivate: { type: 'boolean', description: 'Is room private' }
-        },
-        required: ['name']
-      },
-      response: {
-        201: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                name: { type: 'string' },
-                description: { type: 'string' },
-                allowSelfJoin: { type: 'boolean' },
-                createdBy: { type: 'string' },
-                createdAt: { type: 'string' },
-                updatedAt: { type: 'string' },
-                maxMembers: { type: 'number' },
-                isPrivate: { type: 'boolean' },
-                members: { type: 'array', items: { type: 'string' } }
-              }
-            }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.createRoom
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const roomData = request.body as CreateRoomData;
-      const userId = (request as any).user.userId;
+      const roomData = request.body as CreateRoomData & { userId?: string; id?: string };
+      const userId = roomData.userId || 'system';
       
-      const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const roomId = roomData.id || `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      const existingRoom = await roomStorage.getRoom(roomId);
+      
+      if (existingRoom) {
+        const updateData: UpdateRoomData = {
+          name: roomData.name,
+          description: roomData.description,
+          allowSelfJoin: roomData.allowSelfJoin,
+          maxMembers: roomData.maxMembers,
+          isPrivate: roomData.isPrivate
+        };
+        
+        await roomStorage.updateRoom(roomId, updateData);
+        
+        const updatedRoom = await roomStorage.getRoom(roomId);
+        
+        reply.code(200).send({
+          success: true,
+          data: updatedRoom,
+          message: 'Room updated successfully'
+        });
+        return;
+      }
       
       const room: Room = {
         id: roomId,
@@ -103,7 +66,6 @@ export default async function roomApi(fastify: FastifyInstance) {
       };
 
       await roomStorage.createRoom(room);
-      
       await roomStorage.addMemberToRoom(roomId, userId);
 
       reply.code(201).send({
@@ -117,39 +79,11 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.get('/rooms', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                  allowSelfJoin: { type: 'boolean' },
-                  createdBy: { type: 'string' },
-                  createdAt: { type: 'string' },
-                  updatedAt: { type: 'string' },
-                  maxMembers: { type: 'number' },
-                  isPrivate: { type: 'boolean' },
-                  members: { type: 'array', items: { type: 'string' } }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.getAllRooms
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const rooms = await roomStorage.getAllRooms();
-      
       reply.send({
         success: true,
         data: rooms
@@ -161,42 +95,8 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.get('/rooms/:roomId', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Get a specific room by ID',
-      summary: 'Get Room',
-      tags: ['Room Management'],
-      params: {
-        type: 'object',
-        properties: {
-          roomId: { type: 'string', description: 'Room ID' }
-        },
-        required: ['roomId']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                name: { type: 'string' },
-                description: { type: 'string' },
-                allowSelfJoin: { type: 'boolean' },
-                createdBy: { type: 'string' },
-                createdAt: { type: 'string' },
-                updatedAt: { type: 'string' },
-                maxMembers: { type: 'number' },
-                isPrivate: { type: 'boolean' },
-                members: { type: 'array', items: { type: 'string' } }
-              }
-            }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.getRoom
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { roomId } = request.params as { roomId: string };
@@ -218,57 +118,13 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.put('/rooms/:roomId', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Update a room',
-      summary: 'Update Room',
-      tags: ['Room Management'],
-      params: {
-        type: 'object',
-        properties: {
-          roomId: { type: 'string', description: 'Room ID' }
-        },
-        required: ['roomId']
-      },
-      body: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Room name' },
-          description: { type: 'string', description: 'Room description' },
-          allowSelfJoin: { type: 'boolean', description: 'Allow users to join without approval' },
-          maxMembers: { type: 'number', description: 'Maximum number of members' },
-          isPrivate: { type: 'boolean', description: 'Is room private' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                name: { type: 'string' },
-                description: { type: 'string' },
-                allowSelfJoin: { type: 'boolean' },
-                createdBy: { type: 'string' },
-                createdAt: { type: 'string' },
-                updatedAt: { type: 'string' },
-                maxMembers: { type: 'number' },
-                isPrivate: { type: 'boolean' },
-                members: { type: 'array', items: { type: 'string' } }
-              }
-            }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.updateRoom
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { roomId } = request.params as { roomId: string };
       const updateData = request.body as UpdateRoomData;
-      const userId = (request as any).user.userId;
+      const userId = 'system';
       
       const room = await roomStorage.getRoom(roomId);
       if (!room) {
@@ -300,32 +156,12 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.delete('/rooms/:roomId', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Delete a room',
-      summary: 'Delete Room',
-      tags: ['Room Management'],
-      params: {
-        type: 'object',
-        properties: {
-          roomId: { type: 'string', description: 'Room ID' }
-        },
-        required: ['roomId']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            message: { type: 'string' }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.deleteRoom
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { roomId } = request.params as { roomId: string };
-      const userId = (request as any).user.userId;
+      const userId = 'system';
       
       const room = await roomStorage.getRoom(roomId);
       if (!room) {
@@ -355,42 +191,12 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.get('/rooms/:roomId/members', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Get room members',
-      summary: 'Get Room Members',
-      tags: ['Room Management'],
-      params: {
-        type: 'object',
-        properties: {
-          roomId: { type: 'string', description: 'Room ID' }
-        },
-        required: ['roomId']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  userId: { type: 'string' },
-                  joinedAt: { type: 'string' },
-                  role: { type: 'string', enum: ['admin', 'member'] }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.getRoomMembers
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { roomId } = request.params as { roomId: string };
-      const userId = (request as any).user.userId;
+      const userId = 'system';
       
       const room = await roomStorage.getRoom(roomId);
       if (!room) {
@@ -417,40 +223,13 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.post('/rooms/:roomId/members', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Add member to room',
-      summary: 'Add Room Member',
-      tags: ['Room Management'],
-      params: {
-        type: 'object',
-        properties: {
-          roomId: { type: 'string', description: 'Room ID' }
-        },
-        required: ['roomId']
-      },
-      body: {
-        type: 'object',
-        properties: {
-          userId: { type: 'string', description: 'User ID to add' }
-        },
-        required: ['userId']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            message: { type: 'string' }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.addRoomMember
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { roomId } = request.params as { roomId: string };
       const { userId: targetUserId } = request.body as { userId: string };
-      const currentUserId = (request as any).user.userId;
+      const currentUserId = 'system';
       
       const room = await roomStorage.getRoom(roomId);
       if (!room) {
@@ -480,33 +259,12 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.delete('/rooms/:roomId/members/:userId', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Remove member from room',
-      summary: 'Remove Room Member',
-      tags: ['Room Management'],
-      params: {
-        type: 'object',
-        properties: {
-          roomId: { type: 'string', description: 'Room ID' },
-          userId: { type: 'string', description: 'User ID to remove' }
-        },
-        required: ['roomId', 'userId']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            message: { type: 'string' }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.removeRoomMember
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { roomId, userId: targetUserId } = request.params as { roomId: string; userId: string };
-      const currentUserId = (request as any).user.userId;
+      const currentUserId = 'system';
       
       const room = await roomStorage.getRoom(roomId);
       if (!room) {
@@ -536,38 +294,12 @@ export default async function roomApi(fastify: FastifyInstance) {
   });
 
   fastify.get('/rooms/:roomId/can-join', {
-    preHandler: [jwtAuthGuard],
-    schema: {
-      description: 'Check if user can join room',
-      summary: 'Check Room Access',
-      tags: ['Room Management'],
-      params: {
-        type: 'object',
-        properties: {
-          roomId: { type: 'string', description: 'Room ID' }
-        },
-        required: ['roomId']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                canJoin: { type: 'boolean' },
-                reason: { type: 'string' }
-              }
-            }
-          }
-        }
-      }
-    }
+    preHandler: [authGuard],
+    schema: roomSchemas.checkRoomAccess
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { roomId } = request.params as { roomId: string };
-      const userId = (request as any).user.userId;
+      const userId = 'system';
       
       const result = await roomStorage.canUserJoinRoom(roomId, userId);
       
