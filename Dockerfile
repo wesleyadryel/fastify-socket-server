@@ -18,9 +18,6 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Copy node_modules for plugins that need assets
-RUN cp -r node_modules/@scalar ./dist/ || true
-
 # Production stage
 FROM node:${NODE_VERSION}-slim AS production
 WORKDIR /app
@@ -34,9 +31,6 @@ RUN npm install --omit=dev && npm cache clean --force
 
 # Copy only the built application from build stage
 COPY --from=build /app/dist ./dist
-
-# Copy necessary assets for plugins
-COPY --from=build /app/node_modules/@scalar ./node_modules/@scalar
 
 LABEL name="fastify-socket-server"
 LABEL version="1.0.0"
