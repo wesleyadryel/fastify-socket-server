@@ -9,7 +9,6 @@ export interface SocketData {
   token?: string;
   identifiers?: {
     userUuid?: string;
-    userSource?: string;
     [key: string]: any;
   };
   userUuid?: string;

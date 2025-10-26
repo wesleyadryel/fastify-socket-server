@@ -298,10 +298,6 @@ class RedisStorage {
       return [];
     }
 
-    if (identifiers.userSource && Object.keys(identifiers).length === 1) {
-      return await this.getUsersByUserSource(identifiers.userSource);
-    }
-
     return Array.from(this.localCache.values()).filter(user => {
       for (const key in identifiers) {
         if (identifiers.hasOwnProperty(key)) {
@@ -312,56 +308,6 @@ class RedisStorage {
       }
       return true;
     });
-  }
-
-
-  async getUsersByUserSource(userSource: string): Promise<StoredUser[]> {
-    if (this.useRedis && this.redis) {
-      try {
-
-        const indexKey = `user-source-index:${userSource}`;
-        const userIds = await this.redis.smembers(indexKey);
-        
-        if (userIds.length > 0) {
-
-          const users: StoredUser[] = [];
-          for (const userId of userIds) {
-            const jwtToken = await this.getUserTokenByUuid(userId);
-            if (jwtToken) {
-              const user = await this.getUserByJWT(jwtToken);
-              if (user && user.identifiers.userSource === userSource) {
-                users.push(user);
-              }
-            }
-          }
-          return users;
-        } else {
-
-          const users = Array.from(this.localCache.values()).filter(user => 
-            user.identifiers.userSource === userSource
-          );
-          
-          if (users.length > 0) {
-            const userIds = users.map(user => user.identifiers.userUuid).filter(Boolean);
-            if (userIds.length > 0) {
-              await this.redis.sadd(indexKey, ...userIds);
-              await this.redis.expire(indexKey, this.ttl);
-            }
-          }
-          
-          return users;
-        }
-      } catch (error) {
-        console.error('Redis getUsersByUserSource error:', error);
-        return Array.from(this.localCache.values()).filter(user => 
-          user.identifiers.userSource === userSource
-        );
-      }
-    } else {
-      return Array.from(this.localCache.values()).filter(user => 
-        user.identifiers.userSource === userSource
-      );
-    }
   }
 
 
@@ -383,9 +329,6 @@ class RedisStorage {
                 return user ? [user] : [];
               }
               return [];
-              
-            case 'userSource':
-              return await this.getUsersByUserSource(value);
               
             default:
               return Array.from(this.localCache.values()).filter(user => user.identifiers[key] === value);
@@ -501,12 +444,6 @@ class RedisStorage {
         if (value !== undefined && value !== null) {
           const indexKey = `user-index:${key}:${value}`;
           pipeline.srem(indexKey, user.identifiers.userUuid || '');
-          
-
-          if (key === 'userSource') {
-            const sourceIndexKey = `user-source-index:${value}`;
-            pipeline.srem(sourceIndexKey, user.identifiers.userUuid || '');
-          }
         }
       }
       

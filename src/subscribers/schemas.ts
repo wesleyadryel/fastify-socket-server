@@ -335,8 +335,7 @@ export const subscriberSchemas = {
         emitToUser: {
           type: 'object',
           properties: {
-            userUuid: { type: 'string', description: 'Target user by userUuid' },
-            userSource: { type: 'string', description: 'Target user by userSource' }
+            userUuid: { type: 'string', description: 'Target user by userUuid' }
           }
         },
         includeSender: { type: 'boolean', description: 'Whether to include the sender in the broadcast' }

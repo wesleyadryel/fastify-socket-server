@@ -40,7 +40,6 @@ app.register(cors, { origin: true });
 app.register(helmet, { contentSecurityPolicy: false });
 app.register(rateLimitPlugin);
 
-// Only register Swagger in development mode
 if (process.env.NODE_ENV === 'development' || process.env.Debug === 'true') {
   app.register(swaggerPlugin);
 }
