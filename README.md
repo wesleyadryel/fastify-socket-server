@@ -623,34 +623,6 @@ const socket = io('http://localhost:3000', {
 
 ### Available Events
 
-#### `sendMessage`
-Sends a message to a specific room.
-
-**Parameters:**
-```json
-{
-  "content": "Hello, world!",
-  "roomId": "room123",
-  "type": "text"
-}
-```
-
-**Message types:**
-- `text` - Text message (default)
-- `system` - System message
-- `notification` - Notification
-
-**Callback Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "content": "Hello, world!",
-    "roomId": "room123",
-    "type": "text"
-  }
-}
-```
 
 #### `joinRoom`
 Joins a specific room.

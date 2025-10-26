@@ -7,6 +7,7 @@ export interface StorageConfig {
     db: number;
   };
   userKeyPrefix: string;
+  roomKeyPrefix: string;
   ttl: number;
 }
 
@@ -19,6 +20,7 @@ export const storageConfig: StorageConfig = {
     db: parseInt(process.env.REDIS_DB || '0')
   },
   userKeyPrefix: process.env.USER_KEY_PREFIX || 'user',
+  roomKeyPrefix: process.env.ROOM_KEY_PREFIX || 'room',
   ttl: parseInt(process.env.STORAGE_TTL || '3600')
 };
 
@@ -28,6 +30,7 @@ export function getStorageInfo(): { type: string; config: Partial<StorageConfig>
     config: {
       useRedis: storageConfig.useRedis,
       userKeyPrefix: storageConfig.userKeyPrefix,
+      roomKeyPrefix: storageConfig.roomKeyPrefix,
       ttl: storageConfig.ttl
     }
   };

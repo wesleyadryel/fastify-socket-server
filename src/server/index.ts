@@ -8,6 +8,7 @@ import socketioServer from '../plugins/socket';
 import jwtApi from '../jwt/jwt-api';
 import subscriberApi from '../subscribers/api';
 import userApi from '../user/api';
+import { roomApi } from '../room';
 import swaggerPlugin from '../plugins/swagger';
 import underPressurePlugin from '../plugins/under-pressure';
 
@@ -48,6 +49,7 @@ app.register(socketioServer);
 app.register(jwtApi);
 app.register(subscriberApi);
 app.register(userApi);
+app.register(roomApi, { prefix: '/api' });
 app.register(underPressurePlugin);
 app.register(localRequestsPlugin);
 app.register(metricsPluginCustom);

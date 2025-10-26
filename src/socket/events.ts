@@ -1,66 +1,101 @@
 import { Socket } from 'socket.io';
 import { ZodError } from 'zod';
-import { messageDataSchema, roomIdSchema } from '../validation/zod-schemas';
+import { roomIdSchema } from '../validation/zod-schemas';
 import { subscriberService } from '../subscribers';
 import { EventDataValidator } from '../subscribers/validation';
-
-export function handleSendMessage(socket: Socket) {
-  socket.on('sendMessage', (data: any, callback: (response: any) => void) => {
-    try {
-      const parsed = messageDataSchema.parse(data);
-      callback({ success: true, data: parsed });
-      if (parsed.roomId) {
-        socket.to(parsed.roomId).emit('messageReceived', {
-          ...parsed,
-          userId: socket.data.identifiers?.userId,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    } catch (err) {
-      if (err instanceof ZodError) {
-        callback({ success: false, error: 'Validation error', details: err.issues });
-      } else {
-        callback({ success: false, error: 'Invalid request' });
-      }
-    }
-  });
-}
+import { roomStorage } from '../room';
 
 export function handleJoinRoom(socket: Socket) {
-  socket.on('joinRoom', (roomId: string, callback: (response: any) => void) => {
+  socket.on('joinRoom', async (roomId: string, callback: (response: any) => void) => {
     try {
       const parsed = roomIdSchema.parse({ roomId });
-      callback({ success: true, data: parsed });
+      const userId = socket.data.identifiers?.userId;
+      
+      if (!userId) {
+        callback({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      const canJoinResult = await roomStorage.canUserJoinRoom(parsed.roomId, userId);
+      if (!canJoinResult.canJoin) {
+        if (callback) {
+          callback({ 
+            success: false, 
+            error: canJoinResult.reason || 'Cannot join room' 
+          });
+        }
+        return;
+      }
+
+      const isMember = await roomStorage.isUserInRoom(parsed.roomId, userId);
+      if (!isMember) {
+        const added = await roomStorage.addMemberToRoom(parsed.roomId, userId);
+        if (!added) {
+          if (callback) {
+            callback({ success: false, error: 'Failed to add user to room' });
+          }
+          return;
+        }
+      }
+
+      if (callback) {
+        callback({ success: true, data: parsed });
+      }
       socket.join(parsed.roomId);
       socket.to(parsed.roomId).emit('userJoined', {
-        userId: socket.data.identifiers?.userId,
+        userId: userId,
         roomId: parsed.roomId,
       });
     } catch (err) {
       if (err instanceof ZodError) {
-        callback({ success: false, error: 'Validation error', details: err.issues });
+        if (callback) {
+          callback({ success: false, error: 'Validation error', details: err.issues });
+        }
       } else {
-        callback({ success: false, error: 'Invalid request' });
+        if (callback) {
+          callback({ success: false, error: 'Invalid request' });
+        }
       }
     }
   });
 }
 
 export function handleLeaveRoom(socket: Socket) {
-  socket.on('leaveRoom', (roomId: string, callback: (response: any) => void) => {
+  socket.on('leaveRoom', async (roomId: string, callback: (response: any) => void) => {
     try {
       const parsed = roomIdSchema.parse({ roomId });
-      callback({ success: true, data: parsed });
+      const userId = socket.data.identifiers?.userId;
+      
+      if (!userId) {
+        callback({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      const removed = await roomStorage.removeMemberFromRoom(parsed.roomId, userId);
+      if (!removed) {
+        if (callback) {
+          callback({ success: false, error: 'Failed to remove user from room' });
+        }
+        return;
+      }
+
+      if (callback) {
+        callback({ success: true, data: parsed });
+      }
       socket.leave(parsed.roomId);
       socket.to(parsed.roomId).emit('userLeft', {
-        userId: socket.data.identifiers?.userId,
+        userId: userId,
         roomId: parsed.roomId,
       });
     } catch (err) {
       if (err instanceof ZodError) {
-        callback({ success: false, error: 'Validation error', details: err.issues });
+        if (callback) {
+          callback({ success: false, error: 'Validation error', details: err.issues });
+        }
       } else {
-        callback({ success: false, error: 'Invalid request' });
+        if (callback) {
+          callback({ success: false, error: 'Invalid request' });
+        }
       }
     }
   });
@@ -68,6 +103,12 @@ export function handleLeaveRoom(socket: Socket) {
 
 export function handleDynamicEvents(socket: Socket) {
   socket.onAny((eventName: string, data: any, callback?: (response: any) => void) => {
+    const hasSpecificListener = socket.listenerCount(eventName) > 0;
+    
+    if (hasSpecificListener) {
+      return;
+    }
+
     try {
       const subscribers = subscriberService.getSubscribersByEvent(eventName);
       
@@ -140,7 +181,9 @@ export function handleDynamicEvents(socket: Socket) {
 
     } catch (err) {
       if (callback) {
+      if (callback) {
         callback({ success: false, error: 'Event processing failed' });
+      }
       }
     }
   });
