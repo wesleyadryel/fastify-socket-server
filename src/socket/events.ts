@@ -10,7 +10,7 @@ export function handleJoinRoom(socket: Socket) {
     try {
       const parsed = roomIdSchema.parse({ roomId });
       const userUuid = socket.data.userUuid;
-      
+
       if (!userUuid) {
         callback({ success: false, error: 'User not authenticated' });
         return;
@@ -19,9 +19,9 @@ export function handleJoinRoom(socket: Socket) {
       const canJoinResult = await roomStorage.canUserJoinRoom(parsed.roomId, userUuid);
       if (!canJoinResult.canJoin) {
         if (callback) {
-          callback({ 
-            success: false, 
-            error: canJoinResult.reason || 'Cannot join room' 
+          callback({
+            success: false,
+            error: canJoinResult.reason || 'Cannot join room'
           });
         }
         return;
@@ -29,7 +29,7 @@ export function handleJoinRoom(socket: Socket) {
 
       const isMember = await roomStorage.isUserInRoom(parsed.roomId, userUuid);
       if (!isMember) {
-        const added = await roomStorage.addMemberToRoom(parsed.roomId, userUuid);
+        const added = await roomStorage.addMemberToRoom(parsed.roomId, userUuid, socket);
         if (!added) {
           if (callback) {
             callback({ success: false, error: 'Failed to add user to room' });
@@ -41,11 +41,6 @@ export function handleJoinRoom(socket: Socket) {
       if (callback) {
         callback({ success: true });
       }
-      socket.join(parsed.roomId);
-      socket.to(parsed.roomId).emit('userJoined', {
-        userUuid: userUuid,
-        roomId: parsed.roomId,
-      });
     } catch (err) {
       if (err instanceof ZodError) {
         if (callback) {
@@ -65,7 +60,7 @@ export function handleLeaveRoom(socket: Socket) {
     try {
       const parsed = roomIdSchema.parse({ roomId });
       const userUuid = socket.data.userUuid;
-      
+
       if (!userUuid) {
         callback({ success: false, error: 'User not authenticated' });
         return;
@@ -104,14 +99,14 @@ export function handleLeaveRoom(socket: Socket) {
 export function handleDynamicEvents(socket: Socket) {
   socket.onAny((eventName: string, data: any, callback?: (response: any) => void) => {
     const hasSpecificListener = socket.listenerCount(eventName) > 0;
-    
+
     if (hasSpecificListener) {
       return;
     }
 
     try {
       const subscribers = subscriberService.getSubscribersByEvent(eventName);
-      
+
       if (subscribers.length === 0) {
         if (callback) {
           callback({ success: false, error: `No subscribers found for event: ${eventName}` });
@@ -130,14 +125,14 @@ export function handleDynamicEvents(socket: Socket) {
 
         if (subscriber.replicable) {
           let sanitizedData = data;
-          
+
           if (subscriber.parameters && subscriber.parameters.length > 0) {
             try {
               sanitizedData = EventDataValidator.validateAndSanitizeData(data, subscriber.parameters);
             } catch (validationError: any) {
               if (callback) {
-                callback({ 
-                  success: false, 
+                callback({
+                  success: false,
                   error: `Validation failed: ${validationError.message}`,
                   subscriberId: subscriber.id
                 });
@@ -170,20 +165,20 @@ export function handleDynamicEvents(socket: Socket) {
       });
 
       if (callback) {
-        callback({ 
-          success: true, 
-          data: { 
+        callback({
+          success: true,
+          data: {
             event: eventName,
             originalData: data
-          } 
+          }
         });
       }
 
     } catch (err) {
       if (callback) {
-      if (callback) {
-        callback({ success: false, error: 'Event processing failed' });
-      }
+        if (callback) {
+          callback({ success: false, error: 'Event processing failed' });
+        }
       }
     }
   });

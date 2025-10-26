@@ -1,6 +1,7 @@
 import { Redis } from 'ioredis';
 import { Room, RoomMember } from './types';
 import { storageConfig } from '../storage/config';
+import { Socket } from 'socket.io';
 
 class RoomStorage {
   private redis: Redis | null = null;
@@ -10,7 +11,7 @@ class RoomStorage {
 
   constructor() {
     this.useRedis = storageConfig.useRedis;
-    
+
     if (this.useRedis) {
       this.redis = new Redis({
         host: storageConfig.redis.host,
@@ -65,10 +66,10 @@ class RoomStorage {
   async getRoom(roomId: string): Promise<Room | null> {
     if (this.useRedis && this.redis) {
       try {
-        
+
         const roomKey = this.getRoomKey(roomId);
         const roomData = await this.redis.hgetall(roomKey);
-        
+
         if (!roomData.id) {
           return null;
         }
@@ -130,7 +131,7 @@ class RoomStorage {
     if (this.useRedis && this.redis) {
       try {
         const roomKey = this.getRoomKey(roomId);
-        
+
         await this.redis.del(roomKey);
         await this.redis.del(this.getRoomMembersKey(roomId));
         return true;
@@ -151,12 +152,12 @@ class RoomStorage {
         const pattern = `${storageConfig.roomKeyPrefix}:*`;
         const rooms: Room[] = [];
         let cursor = '0';
-        
+
         do {
           const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
           cursor = result[0];
           const keys = result[1];
-          
+
           for (const key of keys) {
             if (!key.includes(':members')) {
               const room = await this.getRoom(key.replace(`${storageConfig.roomKeyPrefix}:`, ''));
@@ -166,7 +167,7 @@ class RoomStorage {
             }
           }
         } while (cursor !== '0');
-        
+
         return rooms;
       } catch (error) {
         console.error('Redis get all rooms error:', error);
@@ -177,7 +178,7 @@ class RoomStorage {
     }
   }
 
-  async addMemberToRoom(roomId: string, userId: string): Promise<boolean> {
+  async addMemberToRoom(roomId: string, userId: string, socket?: Socket): Promise<boolean> {
     const room = await this.getRoom(roomId);
     if (!room) {
       return false;
@@ -214,6 +215,14 @@ class RoomStorage {
         const members = this.roomMembersCache.get(roomId) || [];
         members.push(member);
         this.roomMembersCache.set(roomId, members);
+      }
+
+      if (socket) {
+        socket.join(roomId);
+        socket.to(roomId).emit('userJoined', {
+          userUuid: userId,
+          roomId: roomId,
+        });
       }
     }
 
@@ -260,7 +269,7 @@ class RoomStorage {
       try {
         const membersKey = this.getRoomMembersKey(roomId);
         const membersData = await this.redis.hgetall(membersKey);
-        
+
         return Object.values(membersData).map(memberJson => JSON.parse(memberJson));
       } catch (error) {
         console.error('Redis get room members error:', error);
