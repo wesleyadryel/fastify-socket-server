@@ -29,7 +29,6 @@ export const roomSchemas = {
               name: { type: 'string' },
               description: { type: 'string' },
               allowSelfJoin: { type: 'boolean' },
-              createdBy: { type: 'string' },
               createdAt: { type: 'string' },
               updatedAt: { type: 'string' },
               maxMembers: { type: 'number' },
@@ -51,7 +50,6 @@ export const roomSchemas = {
               name: { type: 'string' },
               description: { type: 'string' },
               allowSelfJoin: { type: 'boolean' },
-              createdBy: { type: 'string' },
               createdAt: { type: 'string' },
               updatedAt: { type: 'string' },
               maxMembers: { type: 'number' },
@@ -68,13 +66,6 @@ export const roomSchemas = {
     description: 'Get all rooms',
     summary: 'Get All Rooms',
     tags: ['Room Management'],
-    querystring: {
-      type: 'object',
-      properties: {
-        userUuid: { type: 'string', description: 'User UUID' }
-      },
-      required: ['userUuid']
-    },
     response: {
       200: {
         type: 'object',
@@ -89,7 +80,6 @@ export const roomSchemas = {
                 name: { type: 'string' },
                 description: { type: 'string' },
                 allowSelfJoin: { type: 'boolean' },
-                createdBy: { type: 'string' },
                 createdAt: { type: 'string' },
                 updatedAt: { type: 'string' },
                 maxMembers: { type: 'number' },
@@ -114,13 +104,6 @@ export const roomSchemas = {
       },
       required: ['roomId']
     },
-    querystring: {
-      type: 'object',
-      properties: {
-        userUuid: { type: 'string', description: 'User UUID' }
-      },
-      required: ['userUuid']
-    },
     response: {
       200: {
         type: 'object',
@@ -133,55 +116,6 @@ export const roomSchemas = {
               name: { type: 'string' },
               description: { type: 'string' },
               allowSelfJoin: { type: 'boolean' },
-              createdBy: { type: 'string' },
-              createdAt: { type: 'string' },
-              updatedAt: { type: 'string' },
-              maxMembers: { type: 'number' },
-              isPrivate: { type: 'boolean' },
-              members: { type: 'array', items: { type: 'string' } }
-            }
-          }
-        }
-      }
-    }
-  },
-
-  updateRoom: {
-    description: 'Update a room',
-    summary: 'Update Room',
-    tags: ['Room Management'],
-    params: {
-      type: 'object',
-      properties: {
-        roomId: { type: 'string', description: 'Room ID' }
-      },
-      required: ['roomId']
-    },
-    body: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'Room name' },
-        description: { type: 'string', description: 'Room description' },
-        allowSelfJoin: { type: 'boolean', description: 'Allow users to join without approval' },
-        maxMembers: { type: 'number', description: 'Maximum number of members' },
-        isPrivate: { type: 'boolean', description: 'Is room private' },
-        userUuid: { type: 'string', description: 'User UUID' }
-      },
-      required: ['userUuid']
-    },
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean' },
-          data: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-              description: { type: 'string' },
-              allowSelfJoin: { type: 'boolean' },
-              createdBy: { type: 'string' },
               createdAt: { type: 'string' },
               updatedAt: { type: 'string' },
               maxMembers: { type: 'number' },
@@ -205,13 +139,6 @@ export const roomSchemas = {
       },
       required: ['roomId']
     },
-    body: {
-      type: 'object',
-      properties: {
-        userUuid: { type: 'string', description: 'User UUID' }
-      },
-      required: ['userUuid']
-    },
     response: {
       200: {
         type: 'object',
@@ -234,17 +161,15 @@ export const roomSchemas = {
       },
       required: ['roomId']
     },
-    body: {
+    querystring: {
       type: 'object',
       properties: {
-        userUuid: { type: 'string', description: 'User UUID' },
         forceCreate: { 
           type: 'boolean', 
           description: 'Force create room if it does not exist',
           default: false
         }
-      },
-      required: ['userUuid']
+      }
     },
     response: {
       200: {
@@ -252,14 +177,9 @@ export const roomSchemas = {
         properties: {
           success: { type: 'boolean' },
           data: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                userUuid: { type: 'string' },
-                joinedAt: { type: 'string' },
-                role: { type: 'string', enum: ['admin', 'member'] }
-              }
+            type: 'object',
+            properties: {
+              members: { type: 'array', items: { type: 'string' } }
             }
           }
         }
@@ -281,14 +201,13 @@ export const roomSchemas = {
     body: {
       type: 'object',
       properties: {
-        userUuid: { type: 'string', description: 'User UUID to add' },
         forceCreate: { 
           type: 'boolean', 
           description: 'Force create room if it does not exist',
           default: false
-        }
-      },
-      required: ['userUuid']
+        },
+        userUuid: { type: ['string', 'number'] , description: 'User UUID to add' }
+      }
     },
     response: {
       200: {

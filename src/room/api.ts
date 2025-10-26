@@ -58,7 +58,6 @@ export default async function roomApi(fastify: FastifyInstance) {
                 name: roomData.name,
                 description: roomData.description,
                 allowSelfJoin: roomData.allowSelfJoin,
-                createdBy: userUuid,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 members: [userUuid],
@@ -88,7 +87,6 @@ export default async function roomApi(fastify: FastifyInstance) {
         schema: roomSchemas.getAllRooms
     }, async (request: FastifyRequest, reply: FastifyReply) => {
         try {
-            const { userUuid } = request.query as { userUuid: string };
             const rooms = await roomStorage.getAllRooms();
             reply.send({
                 success: true,
@@ -106,7 +104,6 @@ export default async function roomApi(fastify: FastifyInstance) {
     }, async (request: FastifyRequest, reply: FastifyReply) => {
         try {
             const { roomId } = request.params as { roomId: string };
-            const { userUuid } = request.query as { userUuid: string };
             const room = await roomStorage.getRoom(roomId);
 
             if (!room) {
@@ -124,60 +121,16 @@ export default async function roomApi(fastify: FastifyInstance) {
         }
     });
 
-    fastify.post('/rooms/:roomId/update', {
-        preHandler: [authGuard],
-        schema: roomSchemas.updateRoom
-    }, async (request: FastifyRequest, reply: FastifyReply) => {
-        try {
-            const { roomId } = request.params as { roomId: string };
-            const updateData = request.body as UpdateRoomData & { userUuid: string };
-            const { userUuid } = updateData;
-
-            const room = await roomStorage.getRoom(roomId);
-            if (!room) {
-                reply.code(404).send({ error: 'Room not found' });
-                return;
-            }
-
-            if (room.createdBy !== userUuid) {
-                reply.code(403).send({ error: 'Only room creator can update room' });
-                return;
-            }
-
-            const success = await roomStorage.updateRoom(roomId, updateData);
-            if (!success) {
-                reply.code(500).send({ error: 'Failed to update room' });
-                return;
-            }
-
-            const updatedRoom = await roomStorage.getRoom(roomId);
-
-            reply.send({
-                success: true,
-                data: updatedRoom
-            });
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500).send({ error: 'Internal server error' });
-        }
-    });
-
-    fastify.post('/rooms/:roomId/delete', {
+    fastify.delete('/rooms/:roomId/delete', {
         preHandler: [authGuard],
         schema: roomSchemas.deleteRoom
     }, async (request: FastifyRequest, reply: FastifyReply) => {
         try {
             const { roomId } = request.params as { roomId: string };
-            const { userUuid } = request.body as { userUuid: string };
 
             const room = await roomStorage.getRoom(roomId);
             if (!room) {
                 reply.code(404).send({ error: 'Room not found' });
-                return;
-            }
-
-            if (room.createdBy !== userUuid) {
-                reply.code(403).send({ error: 'Only room creator can delete room' });
                 return;
             }
 
@@ -197,13 +150,13 @@ export default async function roomApi(fastify: FastifyInstance) {
         }
     });
 
-    fastify.post('/rooms/:roomId/members/get', {
+    fastify.get('/rooms/:roomId/members', {
         preHandler: [authGuard],
         schema: roomSchemas.getRoomMembers
     }, async (request: FastifyRequest, reply: FastifyReply) => {
         try {
             const { roomId } = request.params as { roomId: string };
-            const { userUuid, forceCreate = false } = request.body as { userUuid: string; forceCreate?: boolean };
+            const { forceCreate = false } = request.query as { forceCreate?: boolean };
 
             let room = await roomStorage.getRoom(roomId);
 
@@ -213,20 +166,14 @@ export default async function roomApi(fastify: FastifyInstance) {
                     name: `Room ${roomId}`,
                     description: `Auto-created room ${roomId}`,
                     allowSelfJoin: true,
-                    createdBy: userUuid,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
-                    members: [userUuid],
+                    members: [],
                     maxMembers: undefined,
                     isPrivate: false
                 };
 
                 await roomStorage.createRoom(newRoom);
-                const addResult = await roomStorage.addMemberToRoom(roomId, userUuid);
-                if (!addResult.success) {
-                    reply.code(500).send({ error: addResult.message || 'Failed to add member to room' });
-                    return;
-                }
                 room = newRoom;
             }
 
@@ -235,17 +182,13 @@ export default async function roomApi(fastify: FastifyInstance) {
                 return;
             }
 
-            const isMember = await roomStorage.isUserInRoom(roomId, userUuid);
-            if (!isMember) {
-                reply.code(403).send({ error: 'You are not a member of this room' });
-                return;
-            }
-
             const members = await roomStorage.getRoomMembers(roomId);
 
             reply.send({
                 success: true,
-                data: members
+                data: {
+                    members: members,
+                }
             });
         } catch (error) {
             fastify.log.error(error);
@@ -259,20 +202,27 @@ export default async function roomApi(fastify: FastifyInstance) {
     }, async (request: FastifyRequest, reply: FastifyReply) => {
         try {
             const { roomId } = request.params as { roomId: string };
-            const { userUuid: targetUserUuid, forceCreate } = request.body as { userUuid: string; forceCreate?: boolean };
+            const { forceCreate } = request.body as { forceCreate?: boolean };
+            const { userUuid } = request.body as { userUuid: string | number };
 
+            if (!userUuid) {
+                reply.code(400).send({ error: 'User UUID is required' });
+                return;
+            }
+
+            const targetUserUuid = userUuid.toString();
             const room = await roomStorage.getRoom(roomId);
+
             if (!room) {
-                if (forceCreate && targetUserUuid) {
+                if (forceCreate) {
                     const newRoom: Room = {
                         id: roomId,
                         name: `Room ${roomId}`,
                         description: `Auto-created room ${roomId}`,
                         allowSelfJoin: true,
-                        createdBy: targetUserUuid,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
-                        members: [targetUserUuid],
+                        members: [],
                         maxMembers: undefined,
                         isPrivate: false
                     };
@@ -286,10 +236,16 @@ export default async function roomApi(fastify: FastifyInstance) {
 
             const io = fastify.io;
             const result = await getSocketClientByUuid(targetUserUuid, io);
+            if (!result) {
+                reply.code(404).send({ error: 'User not found' });
+                return;
+            }
+
             if (!result?.socket) {
                 reply.code(404).send({ error: 'User is not connected' });
                 return;
             }
+
 
             const addResult = await roomStorage.addMemberToRoom(roomId, targetUserUuid, result.socket);
             if (!addResult.success) {

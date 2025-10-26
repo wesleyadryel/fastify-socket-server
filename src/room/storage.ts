@@ -46,7 +46,6 @@ class RoomStorage {
           name: room.name,
           description: room.description || '',
           allowSelfJoin: room.allowSelfJoin.toString(),
-          createdBy: room.createdBy,
           createdAt: room.createdAt,
           updatedAt: room.updatedAt,
           maxMembers: room.maxMembers?.toString() || '',
@@ -79,7 +78,6 @@ class RoomStorage {
           name: roomData.name,
           description: roomData.description || undefined,
           allowSelfJoin: roomData.allowSelfJoin === 'true',
-          createdBy: roomData.createdBy,
           createdAt: roomData.createdAt,
           updatedAt: roomData.updatedAt,
           maxMembers: roomData.maxMembers ? parseInt(roomData.maxMembers) : undefined,
@@ -202,7 +200,7 @@ class RoomStorage {
       const member: RoomMember = {
         userId,
         joinedAt: new Date().toISOString(),
-        role: room.createdBy === userId ? 'admin' : 'member'
+        role: 'member'
       };
 
       if (this.useRedis && this.redis) {

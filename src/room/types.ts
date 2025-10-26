@@ -3,7 +3,6 @@ export interface Room {
   name: string;
   description?: string;
   allowSelfJoin: boolean;
-  createdBy: string;
   createdAt: string;
   updatedAt: string;
   members: string[];
