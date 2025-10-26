@@ -7,6 +7,7 @@ dotenv.config();
 import { createJwtSchema, verifyJwtSchema } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
 import { redisStorage } from '../storage/redis';
+import { storageConfig } from '../storage/config';
 
 function generateUserUuid(): string {
   return uuidv4();
@@ -40,7 +41,7 @@ export default async function jwtApi(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             userId: { type: ['string', 'number'], description: 'User identifier' },
-            uuid: { type: ['string', 'number'], description: 'User UUID', nullable: true }
+            userUuid: { type: ['string', 'number'], description: 'User UUID', nullable: true }
           },
           required: ['userId']
         },
@@ -56,21 +57,20 @@ export default async function jwtApi(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const body = request.body as any;
-      let { userId, uuid, ...identifiers } = body;
+      let { userId, userUuid, ...identifiers } = body;
 
-      if (!uuid) {
-        uuid = generateUserUuid();
+      if (!userUuid) {
+        userUuid = generateUserUuid();
       }
 
       const payload: any = {
         userId,
-        uuid
+        userUuid: userUuid
       };
 
       payload.identifiers = {
         userId,
-        uuid,
-        userUuid: uuid,
+        userUuid: userUuid,
         ...identifiers
       };
 
@@ -78,7 +78,7 @@ export default async function jwtApi(fastify: FastifyInstance) {
 
       await redisStorage.addUser(
         token,
-        'temp-socket-id',
+        storageConfig.tempSocketId,
         true,
         payload.identifiers,
         []

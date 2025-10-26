@@ -47,7 +47,7 @@ export const authMiddleware = async (
     
     socket.data.authenticated = true;
     socket.data.identifiers = payload.identifiers || { userId: payload.userId };
-    socket.data.userUuid = payload.identifiers?.userUuid || payload.identifiers?.uuid;
+    socket.data.userUuid = payload.identifiers?.userUuid || payload.identifiers?.userUuid;
     
     // Store user data in persistent storage using JWT as primary identifier
     redisStorage.updateUser(
@@ -57,8 +57,12 @@ export const authMiddleware = async (
       payload.identifiers || { userId: payload.userId },
       []
     );
+
+    const userUuid = payload.identifiers?.userUuid || payload.identifiers?.userUuid;
+    if (userUuid) {
+      await redisStorage.whenConnected(socket.id, userUuid);
+    }
     
-  
     next();
   } catch (error: any) {
     Log.error('Auth Middleware Error: Invalid or expired token', {

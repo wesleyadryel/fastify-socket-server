@@ -1,5 +1,4 @@
 import Redis from 'ioredis';
-import { v4 as uuidv4 } from 'uuid';
 import { storageEvents } from './events';
 import { storageConfig } from './config';
 
@@ -20,7 +19,7 @@ class RedisStorage {
 
   constructor() {
     this.useRedis = storageConfig.useRedis;
-    
+
     if (this.useRedis) {
       this.redis = new Redis({
         host: storageConfig.redis.host,
@@ -35,7 +34,7 @@ class RedisStorage {
         console.error('Redis connection error:', err);
       });
 
-      this.redis.on('connect', () => {});
+      this.redis.on('connect', () => { });
     }
   }
 
@@ -45,11 +44,8 @@ class RedisStorage {
     return `${storageConfig.userKeyPrefix}:${hash}`;
   }
 
-  private generateUserUuid(jwtToken: string): string {
-    const crypto = require('crypto');
-    const hash = crypto.createHash('sha256').update(jwtToken).digest('hex');
-    const randomBytes = Buffer.from(hash.substring(0, 32), 'hex');
-    return uuidv4({ random: randomBytes });
+  private getUserUuidKey(userUuid: string): string {
+    return `${storageConfig.userUuidKeyPrefix}:${userUuid}`;
   }
 
   async addUser(jwtToken: string, socketId: string, authenticated: boolean, identifiers: Record<string, any>, rooms: string[] = []): Promise<void> {
@@ -62,11 +58,13 @@ class RedisStorage {
       rooms
     };
 
+    this.localCache.set(jwtToken, userData);
+
     if (this.useRedis && this.redis) {
       try {
         const key = this.getJWTKey(jwtToken);
         const identifiersJson = JSON.stringify(userData.identifiers);
-        
+
         await this.redis.hset(key, {
           socketId: userData.socketId,
           authenticated: userData.authenticated.toString(),
@@ -76,6 +74,7 @@ class RedisStorage {
           rooms: JSON.stringify(userData.rooms)
         });
         await this.redis.expire(key, this.ttl);
+
         storageEvents.emitUserEvent('user_connected', socketId, identifiers.userId || '', identifiers);
       } catch (error) {
         console.error('Redis storage error:', error);
@@ -97,6 +96,12 @@ class RedisStorage {
       rooms
     };
 
+    if (socketId === storageConfig.tempSocketId) {
+      this.localCache.set(jwtToken, userData);
+      storageEvents.emitUserEvent('user_updated', socketId, identifiers.userId || '', identifiers);
+      return;
+    }
+
     if (this.useRedis && this.redis) {
       try {
         const key = this.getJWTKey(jwtToken);
@@ -109,6 +114,7 @@ class RedisStorage {
           rooms: JSON.stringify(userData.rooms)
         });
         await this.redis.expire(key, this.ttl);
+
         storageEvents.emitUserEvent('user_updated', socketId, identifiers.userId || '', identifiers);
       } catch (error) {
         console.error('Redis update error:', error);
@@ -126,6 +132,13 @@ class RedisStorage {
         const userData = await this.getUserByJWT(jwtToken);
         if (userData) {
           await this.redis.del(this.getJWTKey(jwtToken));
+
+          // Remove UUID -> socketId mapping
+          const userUuid = userData.identifiers.userUuid || userData.identifiers.userUuid;
+          if (userUuid) {
+            const uuidKey = this.getUserUuidKey(userUuid);
+            await this.redis.del(uuidKey);
+          }
         }
         if (userData) {
           storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userId || '', userData.identifiers);
@@ -143,6 +156,16 @@ class RedisStorage {
     }
   }
 
+  async whenConnected(socketId: string, userUuid: string): Promise<void> {
+    if (socketId !== storageConfig.tempSocketId) {
+      const uuidKey = this.getUserUuidKey(userUuid);
+      if (this.redis) {
+        await this.redis.set(uuidKey, socketId);
+        await this.redis.expire(uuidKey, this.ttl);
+      }
+    }
+  }
+
   async getUserByJWT(jwtToken: string): Promise<StoredUser | undefined> {
     if (this.useRedis && this.redis) {
       try {
@@ -151,19 +174,19 @@ class RedisStorage {
         if (data && Object.keys(data).length > 0) {
           let identifiersData = {};
           let roomsData = [];
-          
+
           try {
             identifiersData = JSON.parse(data.identifiers);
           } catch (e) {
             console.error('Error parsing identifiers data:', data.identifiers);
           }
-          
+
           try {
             roomsData = JSON.parse(data.rooms);
           } catch (e) {
             console.error('Error parsing rooms data:', data.rooms);
           }
-          
+
           return {
             socketId: data.socketId,
             authenticated: data.authenticated === 'true',
@@ -193,25 +216,25 @@ class RedisStorage {
       try {
         const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
         const users: StoredUser[] = [];
-        
+
         for (const key of keys) {
           const data = await this.redis.hgetall(key);
           if (data && Object.keys(data).length > 0) {
             let identifiersData = {};
             let roomsData = [];
-            
+
             try {
               identifiersData = JSON.parse(data.identifiers);
             } catch (e) {
               console.error('Error parsing identifiers data:', data.identifiers);
             }
-            
+
             try {
               roomsData = JSON.parse(data.rooms);
             } catch (e) {
               console.error('Error parsing rooms data:', data.rooms);
             }
-            
+
             users.push({
               socketId: data.socketId,
               authenticated: data.authenticated === 'true',
@@ -222,7 +245,7 @@ class RedisStorage {
             });
           }
         }
-        
+
         return users;
       } catch (error) {
         console.error('Redis getAllUsers error:', error);
@@ -243,7 +266,7 @@ class RedisStorage {
   async getUsersByIdentifiers(identifiers: Record<string, any>): Promise<StoredUser[]> {
     const allUsers = await this.getAllUsers();
     const foundUsers: StoredUser[] = [];
-    
+
     for (const user of allUsers) {
       let match = true;
       for (const key in identifiers) {
@@ -258,7 +281,7 @@ class RedisStorage {
         foundUsers.push(user);
       }
     }
-    
+
     return foundUsers;
   }
 
@@ -271,7 +294,7 @@ class RedisStorage {
     if (user) {
       user.rooms = rooms;
       user.lastSeen = new Date().toISOString();
-      
+
       if (this.useRedis && this.redis) {
         try {
           const key = this.getJWTKey(jwtToken);
@@ -296,14 +319,14 @@ class RedisStorage {
       try {
         const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
         const users = [];
-        
+
         for (const key of keys) {
           const data = await this.redis.hgetall(key);
-          
+
           if (data && Object.keys(data).length > 0) {
             let identifiersData = {};
             let roomsData = [];
-            
+
             if (data.identifiers) {
               try {
                 identifiersData = JSON.parse(data.identifiers);
@@ -311,7 +334,7 @@ class RedisStorage {
                 console.error('Error parsing identifiers data:', data.identifiers, e);
               }
             }
-            
+
             if (data.rooms) {
               try {
                 roomsData = JSON.parse(data.rooms);
@@ -319,7 +342,7 @@ class RedisStorage {
                 console.error('Error parsing rooms data:', data.rooms, e);
               }
             }
-            
+
             const user = {
               socketId: data.socketId,
               authenticated: data.authenticated === 'true',
@@ -328,11 +351,11 @@ class RedisStorage {
               lastSeen: data.lastSeen,
               rooms: roomsData
             };
-            
+
             users.push(user);
           }
         }
-        
+
         return users;
       } catch (error) {
         console.error('Redis getUsersWithDetails error:', error);
@@ -422,6 +445,82 @@ class RedisStorage {
     return false;
   }
 
+  async getSocketClientByUuid(userUuid: string, io: any): Promise<{ socket: any | null; userData: StoredUser | null; isConnected: boolean } | null> {
+    if (this.useRedis && this.redis) {
+      try {
+        // Busca direta no Redis usando o mapeamento UUID -> socketId
+        const uuidKey = this.getUserUuidKey(userUuid);
+        const socketId = await this.redis.get(uuidKey);
+
+        if (!socketId) {
+          return null;
+        }
+
+        const socket = io.sockets.sockets.get(socketId);
+        const isConnected = !!socket;
+
+        // Buscar dados do usuário no Redis
+        const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
+        let userData: StoredUser | null = null;
+
+        for (const key of keys) {
+          const data = await this.redis.hgetall(key);
+          if (data && data.socketId === socketId) {
+            let identifiersData = {};
+            let roomsData = [];
+
+            try {
+              identifiersData = JSON.parse(data.identifiers);
+            } catch (e) {
+              console.error('Error parsing identifiers data:', data.identifiers);
+            }
+
+            try {
+              roomsData = JSON.parse(data.rooms);
+            } catch (e) {
+              console.error('Error parsing rooms data:', data.rooms);
+            }
+
+            userData = {
+              socketId: data.socketId,
+              authenticated: data.authenticated === 'true',
+              identifiers: identifiersData,
+              connectedAt: data.connectedAt,
+              lastSeen: data.lastSeen,
+              rooms: roomsData
+            };
+            break;
+          }
+        }
+
+        return {
+          socket: socket,
+          userData: userData,
+          isConnected: isConnected
+        };
+      } catch (error) {
+        console.error('Redis getSocketClientByUuid error:', error);
+        return null;
+      }
+    } else {
+      // Fallback para cache local
+      for (const [jwtToken, userData] of this.localCache.entries()) {
+        const userUuidFromData = userData.identifiers.userUuid || userData.identifiers.userUuid;
+        if (userUuidFromData === userUuid) {
+          const socket = io.sockets.sockets.get(userData.socketId);
+          const isConnected = !!socket;
+
+          return {
+            socket: socket,
+            userData: userData,
+            isConnected: isConnected
+          };
+        }
+      }
+      return null;
+    }
+  }
+
   async disconnect(): Promise<void> {
     if (this.redis) {
       await this.redis.quit();
@@ -429,4 +528,11 @@ class RedisStorage {
   }
 }
 
+export async function getSocketClientByUuid(userUuid: string, io: any): Promise<{ socket: any | null; userData: StoredUser | null; isConnected: boolean } | null> {
+  return await redisStorage.getSocketClientByUuid(userUuid, io);
+}
+
+
 export const redisStorage = new RedisStorage();
+
+

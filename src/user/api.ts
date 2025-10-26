@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { redisStorage } from '../storage/redis';
+import { redisStorage, getSocketClientByUuid } from '../storage/redis';
 
 async function authGuard(request: FastifyRequest, reply: FastifyReply) {  
   const authHeader = request.headers['authorization'];
@@ -305,6 +305,76 @@ export default async function userApi(fastify: FastifyInstance) {
       return reply.status(500).send({
         success: false,
         error: 'Failed to disconnect user',
+        details: error.message
+      });
+    }
+  });
+
+  fastify.get('/socket-client', {
+    preHandler: [authGuard],
+    schema: {
+      description: 'Get socket client object by user UUID using direct Redis lookup',
+      summary: 'Get Socket Client by UUID',
+      tags: ['User Management'],
+      querystring: {
+        type: 'object',
+        properties: {
+          userUuid: {
+            type: 'string',
+            description: 'User UUID'
+          }
+        },
+        required: ['userUuid']
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            socketId: { type: ['string', 'null'] },
+            isConnected: { type: 'boolean' },
+            rooms: { type: 'array', items: { type: 'string' } },
+            userData: { type: 'object', additionalProperties: true }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            error: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userUuid } = request.query as { userUuid: string };
+      const io = fastify.io;
+
+      const result = await getSocketClientByUuid(userUuid, io);
+      
+      if (!result) {
+        return reply.status(404).send({
+          success: false,
+          error: 'User not found'
+        });
+      }
+
+      const { socket, userData, isConnected } = result;
+      const rooms = socket ? Array.from(socket.rooms).filter(room => room !== socket.id) : (userData?.rooms || []);
+      const existSocket = !!socket;
+
+      return {
+        success: true,
+        isConnected: isConnected,
+        socketId: existSocket ? (socket?.id || userData?.socketId || null) : undefined,
+        userData: userData,
+        rooms: rooms
+      };
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to get socket client',
         details: error.message
       });
     }
