@@ -210,7 +210,6 @@ export function handleDisconnect(socket: Socket) {
 
     try {
       const userUuid = socket.data.userUuid;
-      const token = socket.data.token;
 
       const rooms = Array.from(socket.rooms).filter(room => room !== socket.id);
       for (const roomId of rooms) {
@@ -226,10 +225,6 @@ export function handleDisconnect(socket: Socket) {
           }
         }
         socket.leave(roomId);
-      }
-
-      if (token && userUuid) {
-        await redisStorage.removeUser(token);
       }
     } catch (error) {
       Log.error('Error during disconnect cleanup', {
