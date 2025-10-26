@@ -5,78 +5,66 @@ import { subscriberService } from '../subscribers';
 import { EventDataValidator } from '../subscribers/validation';
 import { roomStorage } from '../room';
 
+// Helper function to safely call callback
+function safeCallback(callback: (response: any) => void, response: any) {
+  if (callback && typeof callback === 'function') {
+    callback(response);
+  }
+}
+
 export function handleJoinRoom(socket: Socket) {
-  socket.on('joinRoom', async (roomId: string, callback: (response: any) => void) => {
+  socket.on('joinRoom', async (roomId: string, callback?: (response: any) => void) => {
     try {
       const parsed = roomIdSchema.parse({ roomId });
       const userUuid = socket.data.userUuid;
 
       if (!userUuid) {
-        callback({ success: false, error: 'User not authenticated' });
-        return;
+        return safeCallback(callback!, { success: false, error: 'User not authenticated' });
       }
 
       const canJoinResult = await roomStorage.canUserJoinRoom(parsed.roomId, userUuid);
       if (!canJoinResult.canJoin) {
-        if (callback) {
-          callback({
-            success: false,
-            error: canJoinResult.reason || 'Cannot join room'
-          });
-        }
-        return;
+        return safeCallback(callback!, {
+          success: false,
+          error: canJoinResult.reason || 'Cannot join room'
+        });
       }
 
       const isMember = await roomStorage.isUserInRoom(parsed.roomId, userUuid);
       if (!isMember) {
         const addResult = await roomStorage.addMemberToRoom(parsed.roomId, userUuid, socket);
         if (!addResult.success) {
-          if (callback) {
-            callback({ success: false, error: addResult.message || 'Failed to add user to room' });
-          }
-          return;
+          return safeCallback(callback!, { success: false, error: addResult.message || 'Failed to add user to room' });
         }
       }
 
-      if (callback) {
-        callback({ success: true });
-      }
+      safeCallback(callback!, { success: true });
     } catch (err) {
       if (err instanceof ZodError) {
-        if (callback) {
-          callback({ success: false, error: 'Validation error', details: err.issues });
-        }
+        safeCallback(callback!, { success: false, error: 'Validation error', details: err.issues });
       } else {
-        if (callback) {
-          callback({ success: false, error: 'Invalid request' });
-        }
+        safeCallback(callback!, { success: false, error: 'Invalid request' });
       }
     }
   });
 }
 
 export function handleLeaveRoom(socket: Socket) {
-  socket.on('leaveRoom', async (roomId: string, callback: (response: any) => void) => {
+  socket.on('leaveRoom', async (roomId: string, callback?: (response: any) => void) => {
     try {
       const parsed = roomIdSchema.parse({ roomId });
       const userUuid = socket.data.userUuid;
 
       if (!userUuid) {
-        callback({ success: false, error: 'User not authenticated' });
-        return;
+        return safeCallback(callback!, { success: false, error: 'User not authenticated' });
       }
 
       const result = await roomStorage.removeMemberFromRoom(parsed.roomId, userUuid);
       if (!result.success) {
-        if (callback) {
-          callback({ success: false, error: result.reason || 'Failed to remove user from room' });
-        }
-        return;
+        return safeCallback(callback!, { success: false, error: result.reason || 'Failed to remove user from room' });
       }
 
-      if (callback) {
-        callback({ success: true, data: parsed });
-      }
+      safeCallback(callback!, { success: true, data: parsed });
       socket.leave(parsed.roomId);
       socket.to(parsed.roomId).emit('userLeft', {
         userUuid: userUuid,
@@ -84,13 +72,9 @@ export function handleLeaveRoom(socket: Socket) {
       });
     } catch (err) {
       if (err instanceof ZodError) {
-        if (callback) {
-          callback({ success: false, error: 'Validation error', details: err.issues });
-        }
+        safeCallback(callback!, { success: false, error: 'Validation error', details: err.issues });
       } else {
-        if (callback) {
-          callback({ success: false, error: 'Invalid request' });
-        }
+        safeCallback(callback!, { success: false, error: 'Invalid request' });
       }
     }
   });
@@ -108,12 +92,8 @@ export function handleDynamicEvents(socket: Socket) {
       const subscribers = subscriberService.getSubscribersByEvent(eventName);
 
       if (subscribers.length === 0) {
-        if (callback) {
-          callback({ success: false, error: `No subscribers found for event: ${eventName}` });
-        }
-        return;
+        return safeCallback(callback!, { success: false, error: `No subscribers found for event: ${eventName}` });
       }
-
 
       const results = subscribers.map(subscriber => {
         const result = {
@@ -130,13 +110,11 @@ export function handleDynamicEvents(socket: Socket) {
             try {
               sanitizedData = EventDataValidator.validateAndSanitizeData(data, subscriber.parameters);
             } catch (validationError: any) {
-              if (callback) {
-                callback({
-                  success: false,
-                  error: `Validation failed: ${validationError.message}`,
-                  subscriberId: subscriber.id
-                });
-              }
+              safeCallback(callback!, {
+                success: false,
+                error: `Validation failed: ${validationError.message}`,
+                subscriberId: subscriber.id
+              });
               return result;
             }
           }
@@ -150,34 +128,30 @@ export function handleDynamicEvents(socket: Socket) {
 
           if (data.roomId) {
             if (subscriber.includeSender) {
-              socket.emit(eventName, eventData); // to sender
+              socket.emit(eventName, eventData);
             }
             socket.to(data.roomId).emit(eventName, eventData);
           } else {
             if (subscriber.includeSender) {
-              socket.emit(eventName, eventData); // to sender
+              socket.emit(eventName, eventData);
             }
-            socket.broadcast.emit(eventName, eventData); // to others
+            socket.broadcast.emit(eventName, eventData);
           }
         }
 
         return result;
       });
 
-      if (callback) {
-        callback({
-          success: true,
-          data: {
-            event: eventName,
-            originalData: data
-          }
-        });
-      }
+      safeCallback(callback!, {
+        success: true,
+        data: {
+          event: eventName,
+          originalData: data
+        }
+      });
 
     } catch (err) {
-      if (callback) {
-        callback({ success: false, error: 'Event processing failed' });
-      }
+      safeCallback(callback!, { success: false, error: 'Event processing failed' });
     }
   });
 }

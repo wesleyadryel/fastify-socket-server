@@ -3,21 +3,7 @@ import { redisStorage, getSocketClientByUuid } from '../storage/redis';
 import { getUserQuerySchema, deleteUserBodySchema, getUserByTokenParamsSchema, getSocketClientQuerySchema } from '../validation/zod-schemas';
 import { ZodError } from 'zod';
 import { userSchemas } from './schemas';
-
-async function authGuard(request: FastifyRequest, reply: FastifyReply) {  
-  const authHeader = request.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return reply.status(401).send({ error: 'Token not provided' });
-  }
-  const token = authHeader.split(' ')[1];
-  const API_TOKEN = process.env.API_TOKEN;
-  if (!API_TOKEN) {
-    return reply.status(500).send({ error: 'API_TOKEN not configured on server' });
-  }
-  if (token !== API_TOKEN) {
-    return reply.status(401).send({ error: 'Invalid or expired token' });
-  }
-}
+import { authGuard } from '../middleware/auth-guard';
 
 export default async function userApi(fastify: FastifyInstance) {
 

@@ -8,24 +8,10 @@ import { createJwtSchema, verifyJwtSchema } from '../validation/zod-schemas';
 import { fastifyZodPreHandler } from '../validation/zod-utils';
 import { redisStorage } from '../storage/redis';
 import { storageConfig } from '../storage/config';
+import { authGuard } from '../middleware/auth-guard';
 
 function generateUserUuid(): string {
   return uuidv4();
-}
-
-async function authGuard(request: FastifyRequest, reply: FastifyReply) {
-  const authHeader = request.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return reply.status(401).send({ error: 'Token not provided' });
-  }
-  const token = authHeader.split(' ')[1];
-  const API_TOKEN = process.env.API_TOKEN;
-  if (!API_TOKEN) {
-    return reply.status(500).send({ error: 'API_TOKEN not configured on server' });
-  }
-  if (token !== API_TOKEN) {
-    return reply.status(401).send({ error: 'Invalid token' });
-  }
 }
 
 export default async function jwtApi(fastify: FastifyInstance) {

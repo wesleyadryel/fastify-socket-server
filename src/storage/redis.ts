@@ -56,6 +56,39 @@ class RedisStorage {
     return `socket-to-jwt:${socketId}`;
   }
 
+  // Consolidated helper method to save user data
+  private async saveUserData(jwtToken: string, userData: StoredUser, eventType: 'user_connected' | 'user_updated', identifiers: Record<string, any>): Promise<void> {
+    this.localCache.set(jwtToken, userData);
+
+    if (this.useRedis && this.redis) {
+      try {
+        const key = this.getJWTKey(jwtToken);
+        const socketToJWTKey = this.getSocketIdToJWTKey(userData.socketId);
+
+        await this.redis.pipeline()
+          .hset(key, {
+            socketId: userData.socketId,
+            authenticated: userData.authenticated.toString(),
+            identifiers: JSON.stringify(userData.identifiers),
+            connectedAt: userData.connectedAt,
+            lastSeen: userData.lastSeen,
+            rooms: JSON.stringify(userData.rooms)
+          })
+          .expire(key, this.ttl)
+          .set(socketToJWTKey, jwtToken, 'EX', this.ttl)
+          .exec();
+
+        storageEvents.emitUserEvent(eventType, userData.socketId, identifiers.userUuid || '', identifiers);
+        await this.updateUserIndexes(userData);
+      } catch (error) {
+        console.error('Redis storage error:', error);
+        this.localCache.set(jwtToken, userData);
+      }
+    } else {
+      storageEvents.emitUserEvent(eventType, userData.socketId, identifiers.userUuid || '', identifiers);
+    }
+  }
+
   async addUser(jwtToken: string, socketId: string, authenticated: boolean, identifiers: Record<string, any>, rooms: string[] = []): Promise<void> {
     const userData: StoredUser = {
       socketId,
@@ -65,38 +98,7 @@ class RedisStorage {
       lastSeen: new Date().toISOString(),
       rooms
     };
-
-    this.localCache.set(jwtToken, userData);
-
-    if (this.useRedis && this.redis) {
-      try {
-        const key = this.getJWTKey(jwtToken);
-        const identifiersJson = JSON.stringify(userData.identifiers);
-
-        await this.redis.hset(key, {
-          socketId: userData.socketId,
-          authenticated: userData.authenticated.toString(),
-          identifiers: identifiersJson,
-          connectedAt: userData.connectedAt,
-          lastSeen: userData.lastSeen,
-          rooms: JSON.stringify(userData.rooms)
-        });
-        await this.redis.expire(key, this.ttl);
-
-        const socketToJWTKey = this.getSocketIdToJWTKey(socketId);
-        await this.redis.set(socketToJWTKey, jwtToken, 'EX', this.ttl);
-
-        storageEvents.emitUserEvent('user_connected', socketId, identifiers.userUuid || '', identifiers);
-        
-        await this.updateUserIndexes(userData);
-      } catch (error) {
-        console.error('Redis storage error:', error);
-        this.localCache.set(jwtToken, userData);
-      }
-    } else {
-      this.localCache.set(jwtToken, userData);
-      storageEvents.emitUserEvent('user_connected', socketId, identifiers.userUuid || '', identifiers);
-    }
+    await this.saveUserData(jwtToken, userData, 'user_connected', identifiers);
   }
 
   async updateUser(jwtToken: string, socketId: string, authenticated: boolean, identifiers: Record<string, any>, rooms: string[] = []): Promise<void> {
@@ -115,33 +117,7 @@ class RedisStorage {
       return;
     }
 
-    if (this.useRedis && this.redis) {
-      try {
-        const key = this.getJWTKey(jwtToken);
-        await this.redis.hset(key, {
-          socketId: userData.socketId,
-          authenticated: userData.authenticated.toString(),
-          identifiers: JSON.stringify(userData.identifiers),
-          connectedAt: userData.connectedAt,
-          lastSeen: userData.lastSeen,
-          rooms: JSON.stringify(userData.rooms)
-        });
-        await this.redis.expire(key, this.ttl);
-
-        const socketToJWTKey = this.getSocketIdToJWTKey(socketId);
-        await this.redis.set(socketToJWTKey, jwtToken, 'EX', this.ttl);
-
-        storageEvents.emitUserEvent('user_updated', socketId, identifiers.userUuid || '', identifiers);
-        
-        await this.updateUserIndexes(userData);
-      } catch (error) {
-        console.error('Redis update error:', error);
-        this.localCache.set(jwtToken, userData);
-      }
-    } else {
-      this.localCache.set(jwtToken, userData);
-      storageEvents.emitUserEvent('user_updated', socketId, identifiers.userUuid || '', identifiers);
-    }
+    await this.saveUserData(jwtToken, userData, 'user_updated', identifiers);
   }
 
   async removeUser(jwtToken: string): Promise<void> {
@@ -553,14 +529,14 @@ class RedisStorage {
 
     if (this.useRedis && this.redis) {
       try {
-        const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
-        for (const key of keys) {
-          const data = await this.redis.hgetall(key);
-          if (data && data.socketId === userToRemove.socketId) {
-            await this.redis.del(key);
-            storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userUuid || '', userToRemove.identifiers);
-            return true;
-          }
+        // Avoid using KEYS pattern - get JWT from socketId mapping instead
+        const socketToJWTKey = this.getSocketIdToJWTKey(userToRemove.socketId);
+        const jwtToken = await this.redis.get(socketToJWTKey);
+        
+        if (jwtToken) {
+          await this.removeUser(jwtToken);
+          storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userUuid || '', userToRemove.identifiers);
+          return true;
         }
       } catch (error) {
         console.error('Redis removeUserByIdentifiers error:', error);
@@ -617,38 +593,14 @@ class RedisStorage {
         const socket = io.sockets.sockets.get(socketId);
         const isConnected = !!socket;
 
-
-        const keys = await this.redis.keys(`${storageConfig.userKeyPrefix}:*`);
+        // Use socket-to-jwt mapping instead of scanning all keys
+        const socketToJWTKey = this.getSocketIdToJWTKey(socketId);
+        const jwtToken = await this.redis.get(socketToJWTKey);
         let userData: StoredUser | null = null;
 
-        for (const key of keys) {
-          const data = await this.redis.hgetall(key);
-          if (data && data.socketId === socketId) {
-            let identifiersData = {};
-            let roomsData = [];
-
-            try {
-              identifiersData = JSON.parse(data.identifiers);
-            } catch (e) {
-              console.error('Error parsing identifiers data:', data.identifiers);
-            }
-
-            try {
-              roomsData = JSON.parse(data.rooms);
-            } catch (e) {
-              console.error('Error parsing rooms data:', data.rooms);
-            }
-
-            userData = {
-              socketId: data.socketId,
-              authenticated: data.authenticated === 'true',
-              identifiers: identifiersData,
-              connectedAt: data.connectedAt,
-              lastSeen: data.lastSeen,
-              rooms: roomsData
-            };
-            break;
-          }
+        if (jwtToken) {
+          const user = await this.getUserByJWT(jwtToken);
+          userData = user || null;
         }
 
         return {
