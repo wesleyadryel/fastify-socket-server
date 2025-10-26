@@ -17,8 +17,21 @@ class RedisConnection {
         port: storageConfig.redis.port,
         password: storageConfig.redis.password,
         db: storageConfig.redis.db,
-        maxRetriesPerRequest: 3,
-        lazyConnect: true
+        maxRetriesPerRequest: null, // Retry forever
+        lazyConnect: true,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          console.log(`Redis attempting to reconnect (attempt ${times}) in ${delay}ms...`);
+          return delay;
+        },
+        reconnectOnError: (err) => {
+          const targetError = 'READONLY';
+          if (err.message.includes(targetError)) {
+            console.error('Redis READONLY error, reconnecting...');
+            return true;
+          }
+          return false;
+        }
       });
 
       this.instance.on('error', (err) => {
@@ -27,6 +40,10 @@ class RedisConnection {
 
       this.instance.on('connect', () => {
         console.log('Redis connected successfully');
+      });
+
+      this.instance.on('reconnecting', () => {
+        console.log('Redis reconnecting...');
       });
     }
 

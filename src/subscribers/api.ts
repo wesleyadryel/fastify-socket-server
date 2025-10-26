@@ -256,10 +256,24 @@ export default async function subscriberApi(fastify: FastifyInstance) {
       let targetInfo = '';
 
       if (emitToUser) {
-        const targetUsers = await redisStorage.getUsersByIdentifiers(emitToUser);
-        const targetSockets = targetUsers
-          .map((user: any) => io.sockets.sockets.get(user.socketId))
-          .filter((socket: any) => socket !== undefined);
+        let targetSockets: any[] = [];
+
+        if (emitToUser.userUuid) {
+          const result = await redisStorage.getSocketClientByUuid(emitToUser.userUuid, io);
+          if (result?.socket) {
+            targetSockets = [result.socket];
+          }
+        } else {
+          for (const [socketId, socket] of io.sockets.sockets) {
+            const socketIdentifiers = socket.data?.identifiers || {};
+            const matches = Object.entries(emitToUser).every(([key, value]) => 
+              socketIdentifiers[key] === value
+            );
+            if (matches) {
+              targetSockets.push(socket);
+            }
+          }
+        }
 
         for (const socket of targetSockets) {
           if (socket) {
