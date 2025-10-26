@@ -42,7 +42,6 @@ class RedisStorage {
     return `socket-to-jwt:${socketId}`;
   }
 
-  // Consolidated helper method to save user data
   private async saveUserData(jwtToken: string, userData: StoredUser, eventType: 'user_connected' | 'user_updated', identifiers: Record<string, any>): Promise<void> {
     this.localCache.set(jwtToken, userData);
 
@@ -51,7 +50,7 @@ class RedisStorage {
         const key = this.getJWTKey(jwtToken);
         const socketToJWTKey = this.getSocketIdToJWTKey(userData.socketId);
 
-        await this.redis.pipeline()
+        const pipeline = this.redis.pipeline()
           .hset(key, {
             socketId: userData.socketId,
             authenticated: userData.authenticated.toString(),
@@ -60,9 +59,13 @@ class RedisStorage {
             lastSeen: userData.lastSeen,
             rooms: JSON.stringify(userData.rooms)
           })
-          .expire(key, this.ttl)
-          .set(socketToJWTKey, jwtToken, 'EX', this.ttl)
-          .exec();
+          .expire(key, this.ttl);
+
+        if (userData.socketId !== storageConfig.tempSocketId) {
+          pipeline.set(socketToJWTKey, jwtToken, 'EX', this.ttl);
+        }
+
+        await pipeline.exec();
         
         storageEvents.emitUserEvent(eventType, userData.socketId, identifiers.userUuid || '', identifiers);
       } catch (error) {
