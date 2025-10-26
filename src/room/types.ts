@@ -11,7 +11,7 @@ export interface Room {
 }
 
 export interface RoomMember {
-  userId: string;
+  userUuid: string;
   joinedAt: string;
   role: 'admin' | 'member';
 }
@@ -34,10 +34,10 @@ export interface UpdateRoomData {
 
 export interface AddMemberData {
   roomId: string;
-  userId: string;
+  userUuid: string;
 }
 
 export interface RemoveMemberData {
   roomId: string;
-  userId: string;
+  userUuid: string;
 }

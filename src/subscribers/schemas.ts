@@ -335,7 +335,7 @@ export const subscriberSchemas = {
         emitToUser: {
           type: 'object',
           properties: {
-            userId: { type: 'string', description: 'Target user by userId' },
+            userUuid: { type: 'string', description: 'Target user by userUuid' },
             userSource: { type: 'string', description: 'Target user by userSource' }
           }
         },

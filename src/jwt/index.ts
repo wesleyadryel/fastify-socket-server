@@ -10,7 +10,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '999y';
 
 export interface JwtPayload {
   identifiers: {
-    userId: string;
+    userUuid: string;
     userSource?: string;
     [key: string]: any;
   };

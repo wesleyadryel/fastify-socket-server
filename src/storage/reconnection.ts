@@ -8,14 +8,14 @@ class ReconnectionManager {
     this.io = io;
   }
 
-  async handleReconnection(jwtToken: string, socketId: string, userId: string): Promise<boolean> {
+  async handleReconnection(jwtToken: string, socketId: string, userUuid: string): Promise<boolean> {
     try {
       const storedUser = await redisStorage.getUserByJWT(jwtToken);
       if (!storedUser) {
         return false;
       }
 
-      if (storedUser.identifiers.userId !== userId) {
+      if (storedUser.identifiers.userUuid !== userUuid) {
         return false;
       }
 
@@ -49,12 +49,12 @@ class ReconnectionManager {
     }
   }
 
-  async isUserStored(userId: string): Promise<boolean> {
+  async isUserStored(userUuid: string): Promise<boolean> {
     try {
-      const users = await redisStorage.getUsersByUserId(userId);
+      const users = await redisStorage.getUsersByIdentifiers({ userUuid });
       return users.length > 0;
     } catch (error) {
-      console.error(`Error checking if user ${userId} is stored:`, error);
+      console.error(`Error checking if user ${userUuid} is stored:`, error);
       return false;
     }
   }

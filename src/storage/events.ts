@@ -3,17 +3,17 @@ import { EventEmitter } from 'events';
 export interface UserEvent {
   type: 'user_connected' | 'user_disconnected' | 'user_reconnected' | 'user_updated';
   socketId: string;
-  userId: string;
+  userUuid: string;
   user: Record<string, any>;
   timestamp: string;
 }
 
 class StorageEventEmitter extends EventEmitter {
-  emitUserEvent(type: UserEvent['type'], socketId: string, userId: string, user: Record<string, any>): void {
+  emitUserEvent(type: UserEvent['type'], socketId: string, userUuid: string, user: Record<string, any>): void {
     const event: UserEvent = {
       type,
       socketId,
-      userId,
+      userUuid,
       user,
       timestamp: new Date().toISOString()
     };

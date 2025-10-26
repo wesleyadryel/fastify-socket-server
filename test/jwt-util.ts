@@ -1,9 +1,9 @@
 import { jwtManager } from '../src/jwt'
 
-export function generateTestToken(userId = 'test-user', extra: Record<string, any> = {}) {
+export function generateTestToken(userUuid = 'test-user', extra: Record<string, any> = {}) {
   return jwtManager.sign({ 
     identifiers: {
-      userId,
+      userUuid,
       ...extra
     }
   });

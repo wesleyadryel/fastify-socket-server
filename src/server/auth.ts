@@ -8,7 +8,7 @@ export interface SocketData {
   authenticated?: boolean;
   token?: string;
   identifiers?: {
-    userId?: string;
+    userUuid?: string;
     userSource?: string;
     [key: string]: any;
   };
@@ -37,7 +37,7 @@ export const authMiddleware = async (
   try {
     const payload = jwtManager.verify(token);
     
-    if (!payload || typeof payload !== 'object' || !payload.identifiers?.userId) {
+    if (!payload || typeof payload !== 'object' || !payload.identifiers?.userUuid) {
       throw new Error('Invalid payload');
     }
 

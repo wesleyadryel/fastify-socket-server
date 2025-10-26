@@ -6,8 +6,7 @@ export const roomIdSchema = z.object({
 });
 
 export const createJwtSchema = z.object({
-  userId: z.union([z.string().min(1, 'userId is required'), z.number()]),
-  userUuid: z.union([z.string(), z.number()]).optional(),
+  userUuid: z.union([z.string().min(1, 'userUuid is required'), z.number()]),
 });
 
 export const verifyJwtSchema = z.object({
@@ -59,24 +58,23 @@ export const createSubscriberWithSchemaSchema = z.object({
 
 export const getUserQuerySchema = z.object({
   token: z.string().min(1, 'token is required').optional(),
-  userId: z.string().min(1, 'userId is required').optional(),
+  userUuid: z.string().min(1, 'userUuid is required').optional(),
   userSource: z.string().min(1, 'userSource is required').optional(),
 }).refine(
-  (data) => data.token || data.userId || data.userSource,
+  (data) => data.token || data.userUuid || data.userSource,
   {
-    message: 'At least one parameter (token, userId, or userSource) is required',
+    message: 'At least one parameter (token, userUuid, or userSource) is required',
   }
 );
 
 export const deleteUserBodySchema = z.object({
   token: z.string().min(1, 'token is required').optional(),
-  userId: z.string().min(1, 'userId is required').optional(),
   userSource: z.string().min(1, 'userSource is required').optional(),
   userUuid: z.string().min(1, 'userUuid is required').optional(),
 }).refine(
-  (data) => data.token || data.userId || data.userSource || data.userUuid,
+  (data) => data.token || data.userSource || data.userUuid,
   {
-    message: 'At least one parameter (token, userId, userSource, or userUuid) is required',
+    message: 'At least one parameter (token, userSource, or userUuid) is required',
   }
 );
 

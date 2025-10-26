@@ -18,14 +18,14 @@ export const userSchemas = {
   },
 
   getUser: {
-    description: 'Get user data by query parameters (token, userId, or userSource)',
+    description: 'Get user data by query parameters (token, userUuid, or userSource)',
     summary: 'Get User Data',
     tags: ['User Management'],
     querystring: {
       type: 'object',
       properties: {
         token: { type: 'string' },
-        userId: { type: 'string' },
+        userUuid: { type: 'string' },
         userSource: { type: 'string' }
       }
     },
@@ -46,14 +46,13 @@ export const userSchemas = {
   },
 
   deleteUser: {
-    description: 'Disconnect user and remove from Redis by body parameters (token, userId, or userSource)',
+    description: 'Disconnect user and remove from Redis by body parameters (token, userSource, or userUuid)',
     summary: 'Disconnect User',
     tags: ['User Management'],
     body: {
       type: 'object',
       properties: {
         token: { type: 'string' },
-        userId: { type: 'string' },
         userSource: { type: 'string' },
         userUuid: { type: 'string' }
       }

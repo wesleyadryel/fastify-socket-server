@@ -86,7 +86,7 @@ class RedisStorage {
         const socketToJWTKey = this.getSocketIdToJWTKey(socketId);
         await this.redis.set(socketToJWTKey, jwtToken, 'EX', this.ttl);
 
-        storageEvents.emitUserEvent('user_connected', socketId, identifiers.userId || '', identifiers);
+        storageEvents.emitUserEvent('user_connected', socketId, identifiers.userUuid || '', identifiers);
         
         await this.updateUserIndexes(userData);
       } catch (error) {
@@ -95,7 +95,7 @@ class RedisStorage {
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      storageEvents.emitUserEvent('user_connected', socketId, identifiers.userId || '', identifiers);
+      storageEvents.emitUserEvent('user_connected', socketId, identifiers.userUuid || '', identifiers);
     }
   }
 
@@ -111,7 +111,7 @@ class RedisStorage {
 
     if (socketId === storageConfig.tempSocketId) {
       this.localCache.set(jwtToken, userData);
-      storageEvents.emitUserEvent('user_updated', socketId, identifiers.userId || '', identifiers);
+      storageEvents.emitUserEvent('user_updated', socketId, identifiers.userUuid || '', identifiers);
       return;
     }
 
@@ -131,7 +131,7 @@ class RedisStorage {
         const socketToJWTKey = this.getSocketIdToJWTKey(socketId);
         await this.redis.set(socketToJWTKey, jwtToken, 'EX', this.ttl);
 
-        storageEvents.emitUserEvent('user_updated', socketId, identifiers.userId || '', identifiers);
+        storageEvents.emitUserEvent('user_updated', socketId, identifiers.userUuid || '', identifiers);
         
         await this.updateUserIndexes(userData);
       } catch (error) {
@@ -140,7 +140,7 @@ class RedisStorage {
       }
     } else {
       this.localCache.set(jwtToken, userData);
-      storageEvents.emitUserEvent('user_updated', socketId, identifiers.userId || '', identifiers);
+      storageEvents.emitUserEvent('user_updated', socketId, identifiers.userUuid || '', identifiers);
     }
   }
 
@@ -162,7 +162,7 @@ class RedisStorage {
           await this.redis.del(socketToJWTKey);
         }
         if (userData) {
-          storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userId || '', userData.identifiers);
+          storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userUuid || '', userData.identifiers);
         
         await this.removeUserIndexes(userData);
         }
@@ -174,7 +174,7 @@ class RedisStorage {
       const userData = this.localCache.get(jwtToken);
       this.localCache.delete(jwtToken);
       if (userData) {
-        storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userId || '', userData.identifiers);
+        storageEvents.emitUserEvent('user_disconnected', userData.socketId, userData.identifiers.userUuid || '', userData.identifiers);
       }
     }
   }
@@ -288,13 +288,6 @@ class RedisStorage {
   }
 
 
-  async getUsersByUserId(userId: string): Promise<StoredUser[]> {
-    const userIdNum = Number(userId);
-    return Array.from(this.localCache.values()).filter(user => 
-      Number(user.identifiers.userId) === userIdNum
-    );
-  }
-
   async getUsersByIdentifiers(identifiers: Record<string, any>): Promise<StoredUser[]> {
     if (identifiers.userUuid) {
       const jwtToken = await this.getUserTokenByUuid(identifiers.userUuid);
@@ -303,10 +296,6 @@ class RedisStorage {
         return user ? [user] : [];
       }
       return [];
-    }
-
-    if (identifiers.userId && Object.keys(identifiers).length === 1) {
-      return await this.getUsersByUserId(identifiers.userId);
     }
 
     if (identifiers.userSource && Object.keys(identifiers).length === 1) {
@@ -394,9 +383,6 @@ class RedisStorage {
                 return user ? [user] : [];
               }
               return [];
-              
-            case 'userId':
-              return await this.getUsersByUserId(value);
               
             case 'userSource':
               return await this.getUsersByUserSource(value);
@@ -592,7 +578,7 @@ class RedisStorage {
       for (const [jwtToken, user] of this.localCache.entries()) {
         if (user.identifiers.userUuid === userUuid) {
           this.localCache.delete(jwtToken);
-          storageEvents.emitUserEvent('user_disconnected', user.socketId, user.identifiers.userId || '', user.identifiers);
+          storageEvents.emitUserEvent('user_disconnected', user.socketId, user.identifiers.userUuid || '', user.identifiers);
           return true;
         }
       }
@@ -635,7 +621,7 @@ class RedisStorage {
           const data = await this.redis.hgetall(key);
           if (data && data.socketId === userToRemove.socketId) {
             await this.redis.del(key);
-            storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userId || '', userToRemove.identifiers);
+            storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userUuid || '', userToRemove.identifiers);
             return true;
           }
         }
@@ -646,7 +632,7 @@ class RedisStorage {
       for (const [jwtToken, user] of this.localCache.entries()) {
         if (user.socketId === userToRemove.socketId) {
           this.localCache.delete(jwtToken);
-          storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userId || '', userToRemove.identifiers);
+          storageEvents.emitUserEvent('user_disconnected', userToRemove.socketId, userToRemove.identifiers.userUuid || '', userToRemove.identifiers);
           return true;
         }
       }

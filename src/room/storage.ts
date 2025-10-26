@@ -153,7 +153,7 @@ class RoomStorage {
       if (room) {
         const currentMembers = Array.from(sockets).map(socketId => {
           const socket = io.sockets.sockets.get(socketId);
-          return socket?.data?.identifiers?.userUuid || socket?.data?.identifiers?.userId || '';
+          return socket?.data?.identifiers?.userUuid || '';
         }).filter(Boolean);
         
         rooms.push({
@@ -167,7 +167,7 @@ class RoomStorage {
   }
 
 
-  async addMemberToRoom(roomId: string, userId: string, socket?: Socket): Promise<{ success: boolean; message?: string }> {
+  async addMemberToRoom(roomId: string, userUuid: string, socket?: Socket): Promise<{ success: boolean; message?: string }> {
     const room = await this.getRoom(roomId);
     if (!room) {
       return { success: false, message: 'Room not found' };
@@ -177,19 +177,19 @@ class RoomStorage {
       return { success: false, message: 'Room is full' };
     }
 
-    if (room.members.includes(userId)) {
+    if (room.members.includes(userUuid)) {
       if (socket) {
         socket.join(roomId);
       }
       return { success: true, message: 'User is already a member' };
     }
 
-    const updatedMembers = [...room.members, userId];
+    const updatedMembers = [...room.members, userUuid];
     const success = await this.updateRoom(roomId, { members: updatedMembers });
 
     if (success) {
       const member: RoomMember = {
-        userId,
+        userUuid,
         joinedAt: new Date().toISOString(),
         role: 'member'
       };
@@ -197,7 +197,7 @@ class RoomStorage {
       if (this.useRedis && this.redis) {
         try {
           const membersKey = this.getRoomMembersKey(roomId);
-          await this.redis.hset(membersKey, userId, JSON.stringify(member));
+          await this.redis.hset(membersKey, userUuid, JSON.stringify(member));
           await this.redis.expire(membersKey, 86400 * 30);
         } catch (error) {
           console.error('Redis add member error:', error);
@@ -217,13 +217,13 @@ class RoomStorage {
     return { success, message: success ? 'Member added successfully' : 'Failed to add member' };
   }
 
-  async removeMemberFromRoom(roomId: string, userId: string, forceRemove: boolean = false): Promise<{ success: boolean; reason?: string }> {
+  async removeMemberFromRoom(roomId: string, userUuid: string, forceRemove: boolean = false): Promise<{ success: boolean; reason?: string }> {
     const room = await this.getRoom(roomId);
     if (!room) {
       return { success: false, reason: 'Room not found' };
     }
 
-    if (!room.members.includes(userId)) {
+    if (!room.members.includes(userUuid)) {
       return { success: true };
     }
 
@@ -231,20 +231,20 @@ class RoomStorage {
       return { success: false, reason: 'Room does not allow self-removal' };
     }
 
-    const updatedMembers = room.members.filter(id => id !== userId);
+    const updatedMembers = room.members.filter(id => id !== userUuid);
     const success = await this.updateRoom(roomId, { members: updatedMembers });
 
     if (success) {
       if (this.useRedis && this.redis) {
         try {
           const membersKey = this.getRoomMembersKey(roomId);
-          await this.redis.hdel(membersKey, userId);
+          await this.redis.hdel(membersKey, userUuid);
         } catch (error) {
           console.error('Redis remove member error:', error);
         }
       } else {
         const members = this.roomMembersCache.get(roomId) || [];
-        const updatedMembersList = members.filter(member => member.userId !== userId);
+        const updatedMembersList = members.filter(member => member.userUuid !== userUuid);
         this.roomMembersCache.set(roomId, updatedMembersList);
       }
     }
@@ -268,18 +268,18 @@ class RoomStorage {
     }
   }
 
-  async isUserInRoom(roomId: string, userId: string): Promise<boolean> {
+  async isUserInRoom(roomId: string, userUuid: string): Promise<boolean> {
     const room = await this.getRoom(roomId);
-    return room ? room.members.includes(userId) : false;
+    return room ? room.members.includes(userUuid) : false;
   }
 
-  async canUserJoinRoom(roomId: string, userId: string): Promise<{ canJoin: boolean; reason?: string }> {
+  async canUserJoinRoom(roomId: string, userUuid: string): Promise<{ canJoin: boolean; reason?: string }> {
     const room = await this.getRoom(roomId);
     if (!room) {
       return { canJoin: false, reason: `Room ${roomId} not found` };
     }
 
-    if (room.members.includes(userId)) {
+    if (room.members.includes(userUuid)) {
       return { canJoin: true };
     }
 

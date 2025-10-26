@@ -63,7 +63,7 @@ export default async function userApi(fastify: FastifyInstance) {
     try {
       // Validar query parameters usando Zod
       const queryParams = getUserQuerySchema.parse(request.query);
-      const { token, userId, userSource } = queryParams;
+      const { token, userUuid, userSource } = queryParams;
 
       let user = null;
       const io = fastify.io;
@@ -71,8 +71,8 @@ export default async function userApi(fastify: FastifyInstance) {
       if (token) {
         user = await redisStorage.getUserByJWT(token);
       }
-      else if (userId) {
-        const users = await redisStorage.getUsersByUserId(userId);
+      else if (userUuid) {
+        const users = await redisStorage.getUsersByIdentifiers({ userUuid });
         // Log removido para produção
         user = users.length > 0 ? users[0] : null;
       }
@@ -126,7 +126,7 @@ export default async function userApi(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = deleteUserBodySchema.parse(request.body);
-      const { token, userId, userSource, userUuid } = body;
+      const { token, userSource, userUuid } = body;
 
       let user = null;
       const io = fastify.io;
@@ -150,17 +150,6 @@ export default async function userApi(fastify: FastifyInstance) {
           }
           await redisStorage.removeUser(token);
           removed = true;
-        }
-      }
-      else if (userId) {
-        const users = await redisStorage.getUsersByUserId(userId);
-        user = users.length > 0 ? users[0] : null;
-        if (user) {
-          const socket = io.sockets.sockets.get(user.socketId);
-          if (socket) {
-            socket.disconnect(true);
-          }
-          removed = await redisStorage.removeUserByIdentifiers(user.identifiers, token);
         }
       }
       else if (userSource) {

@@ -40,10 +40,9 @@ export default async function jwtApi(fastify: FastifyInstance) {
         body: {
           type: 'object',
           properties: {
-            userId: { type: ['string', 'number'], description: 'User identifier' },
-            userUuid: { type: ['string', 'number'], description: 'User UUID', nullable: true }
+            userUuid: { type: ['string', 'number'], description: 'User UUID' }
           },
-          required: ['userId']
+          required: ['userUuid']
         },
         response: {
           200: {
@@ -57,14 +56,9 @@ export default async function jwtApi(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const body = request.body as any;
-      let { userId, userUuid, ...identifiers } = body;
-
-      if (!userUuid) {
-        userUuid = generateUserUuid();
-      }
+      const { userUuid, ...identifiers } = body;
 
       const identifiersObj: any = {
-        userId,
         userUuid: userUuid,
         ...identifiers
       };
