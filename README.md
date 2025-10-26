@@ -6,7 +6,7 @@ A Fastify server with Socket.IO integration for real-time communication, JWT aut
 
 - **Fastify** - Fast and efficient web framework
 - **Socket.IO** - Real-time communication with v4 best practices
-- **Socket.IO Admin UI** - Real-time monitoring and debugging
+- **Socket.IO Admin UI** - Real-time monitoring and debugging (production & development)
 - **JWT Authentication** - Token-based authentication
 - **Rate Limiting** - Protection against abuse
 - **Health Check** - Server health monitoring
@@ -1041,13 +1041,28 @@ The project includes Socket.IO Admin UI for monitoring and debugging.
 
 ### Configuration
 
-Admin UI is automatically enabled in development mode. To configure authentication, add to your `.env`:
+Admin UI is automatically enabled in all environments. The mode changes automatically based on `NODE_ENV`:
+- **Development mode** (`NODE_ENV=development`): Full details about sockets and rooms
+- **Production mode** (`NODE_ENV=production`): Reduced memory footprint, fewer details
+
+To configure authentication, add to your `.env`:
 
 ```env
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your-secure-password
 ```
 
+**IP Restriction (optional):**
+
+By default, only private IP addresses (local network) can access the Admin UI. To allow specific external IPs:
+
+```env
+ADMIN_ALLOWED_IPS=203.0.113.5,198.51.100.10
+```
+
 **Note:** 
 - The password is automatically hashed by the application
-- In production, always use authentication!
+- In production, **always use authentication** for security
+- Production mode reduces memory usage by limiting socket/room details
+- **Redis Store**: If Redis is configured, Admin UI uses Redis for session storage instead of in-memory, allowing sessions to persist across server restarts
+- **IP Security**: By default, only private network IPs (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x) can access. Set `ADMIN_ALLOWED_IPS` to allow specific external IPs
