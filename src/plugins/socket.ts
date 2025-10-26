@@ -14,9 +14,11 @@ const fastifySocketIO: FastifyPluginAsync<FastifySocketioOptions> = fp(
       done();
     };
 
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'];
+    
     const io = new Server(fastify.server, {
       cors: {
-        origin: "*",
+        origin: allowedOrigins,
         methods: ["GET", "POST"],
         credentials: true
       },

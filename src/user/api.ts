@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { redisStorage, getSocketClientByUuid } from '../storage/redis';
+import { getUserQuerySchema, deleteUserBodySchema, getUserByTokenParamsSchema, getSocketClientQuerySchema } from '../validation/zod-schemas';
+import { ZodError } from 'zod';
 
 async function authGuard(request: FastifyRequest, reply: FastifyReply) {  
   const authHeader = request.headers['authorization'];
@@ -17,59 +19,7 @@ async function authGuard(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export default async function userApi(fastify: FastifyInstance) {
-  fastify.get(
-    '/clients',
-    {
-      preHandler: [authGuard],
-      schema: {
-        description: 'Get all connected socket clients with their identifiers',
-        summary: 'Get Connected Clients',
-        tags: ['User Management'],
-        response: {
-          200: {
-            type: 'object',
-            additionalProperties: true
-          }
-        }
-      }
-    },
-    async (request, reply) => {
-      try {
-        const io = fastify.io;
-        const clientsList = [];
 
-        const storedUsers = await redisStorage.getUsersWithDetails();
-
-        for (const storedUser of storedUsers) {
-          const socket = io.sockets.sockets.get(storedUser.socketId);
-          const rooms = socket ? Array.from(socket.rooms).filter(room => room !== storedUser.socketId) : storedUser.rooms;
-
-          clientsList.push({
-            socketId: storedUser.socketId,
-            identifiers: storedUser.identifiers,
-            connectedAt: storedUser.connectedAt,
-            lastSeen: storedUser.lastSeen,
-            rooms,
-            isConnected: !!socket
-          });
-        }
-
-        console.log('clients', clientsList);
-
-        return {
-          success: true,
-          clientsList,
-          totalClients: clientsList.length
-        };
-      } catch (error: any) {
-        return reply.status(500).send({
-          success: false,
-          error: 'Failed to get connected clients',
-          details: error.message
-        });
-      }
-    }
-  );
 
   fastify.get('/user/token/:token', {
     schema: {
@@ -91,7 +41,7 @@ export default async function userApi(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { token } = request.params as { token: string };
+      const { token } = getUserByTokenParamsSchema.parse(request.params);
       const user = await redisStorage.getUserByJWT(token);
 
       if (!user) {
@@ -106,6 +56,13 @@ export default async function userApi(fastify: FastifyInstance) {
         user
       };
     } catch (error: any) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          details: error.issues
+        });
+      }
       return reply.status(500).send({
         success: false,
         error: 'Failed to get user data',
@@ -123,15 +80,10 @@ export default async function userApi(fastify: FastifyInstance) {
       querystring: {
         type: 'object',
         properties: {
-          token: { type: 'string', description: 'JWT token to find user' },
-          userId: { type: 'string', description: 'User ID to find user' },
-          userSource: { type: 'string', description: 'User source to find user' }
-        },
-        anyOf: [
-          { required: ['token'] },
-          { required: ['userId'] },
-          { required: ['userSource'] }
-        ]
+          token: { type: 'string' },
+          userId: { type: 'string' },
+          userSource: { type: 'string' }
+        }
       },
       response: {
         200: {
@@ -150,15 +102,9 @@ export default async function userApi(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const body = request.body as { token?: string; userId?: string; userSource?: string };
-      const { token, userId, userSource } = body;
-
-      if (!token && !userId && !userSource) {
-        return reply.status(400).send({
-          success: false,
-          error: 'At least one body parameter (token, userId, or userSource) is required'
-        });
-      }
+      // Validar query parameters usando Zod
+      const queryParams = getUserQuerySchema.parse(request.query);
+      const { token, userId, userSource } = queryParams;
 
       let user = null;
       const io = fastify.io;
@@ -168,7 +114,7 @@ export default async function userApi(fastify: FastifyInstance) {
       }
       else if (userId) {
         const users = await redisStorage.getUsersByUserId(userId);
-        console.log('users', users);
+        // Log removido para produção
         user = users.length > 0 ? users[0] : null;
       }
       else if (userSource) {
@@ -200,6 +146,13 @@ export default async function userApi(fastify: FastifyInstance) {
         }
       };
     } catch (error: any) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          details: error.issues
+        });
+      }
       return reply.status(500).send({
         success: false,
         error: 'Failed to get user data',
@@ -217,15 +170,11 @@ export default async function userApi(fastify: FastifyInstance) {
       body: {
         type: 'object',
         properties: {
-          token: { type: 'string', description: 'JWT token to disconnect user' },
-          userId: { type: 'string', description: 'User ID to disconnect user' },
-          userSource: { type: 'string', description: 'User source to disconnect user' }
-        },
-        anyOf: [
-          { required: ['token'] },
-          { required: ['userId'] },
-          { required: ['userSource'] }
-        ]
+          token: { type: 'string' },
+          userId: { type: 'string' },
+          userSource: { type: 'string' },
+          userUuid: { type: 'string' }
+        }
       },
       response: {
         200: {
@@ -244,64 +193,79 @@ export default async function userApi(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const body = request.body as { token?: string; userId?: string; userSource?: string };
-      const { token, userId, userSource } = body;
-
-      if (!token && !userId && !userSource) {
-        return reply.status(400).send({
-          success: false,
-          error: 'At least one body parameter (token, userId, or userSource) is required'
-        });
-      }
+      const body = deleteUserBodySchema.parse(request.body);
+      const { token, userId, userSource, userUuid } = body;
 
       let user = null;
       const io = fastify.io;
+      let removed = false;
 
-      if (token) {
+      // Priorizar userUuid para melhor performance
+      if (userUuid) {
+        removed = await redisStorage.removeUserByUuid(userUuid);
+        if (removed) {
+          // Buscar dados do usuário para resposta
+          const result = await getSocketClientByUuid(userUuid, io);
+          user = result?.userData;
+        }
+      }
+      else if (token) {
         user = await redisStorage.getUserByJWT(token);
+        if (user) {
+          const socket = io.sockets.sockets.get(user.socketId);
+          if (socket) {
+            socket.disconnect(true);
+          }
+          await redisStorage.removeUser(token);
+          removed = true;
+        }
       }
       else if (userId) {
         const users = await redisStorage.getUsersByUserId(userId);
         user = users.length > 0 ? users[0] : null;
+        if (user) {
+          const socket = io.sockets.sockets.get(user.socketId);
+          if (socket) {
+            socket.disconnect(true);
+          }
+          removed = await redisStorage.removeUserByIdentifiers(user.identifiers, token);
+        }
       }
       else if (userSource) {
         const users = await redisStorage.getUsersByIdentifiers({ userSource });
         user = users.length > 0 ? users[0] : null;
+        if (user) {
+          const socket = io.sockets.sockets.get(user.socketId);
+          if (socket) {
+            socket.disconnect(true);
+          }
+          removed = await redisStorage.removeUserByIdentifiers(user.identifiers, token);
+        }
       }
 
-      if (!user) {
+      if (!removed) {
         return reply.status(404).send({
           success: false,
           error: 'User not found'
         });
       }
 
-      const socket = io.sockets.sockets.get(user.socketId);
-      if (socket) {
-        socket.disconnect(true);
-      }
-
-      if (token) {
-        await redisStorage.removeUser(token);
-      } else {
-        const removed = await redisStorage.removeUserByIdentifiers(user.identifiers, token);
-        if (!removed) {
-          return reply.status(404).send({
-            success: false,
-            error: 'User not found in storage'
-          });
-        }
-      }
-
       return {
         success: true,
         message: 'User disconnected and removed from storage',
-        user: {
+        user: user ? {
           socketId: user.socketId,
           identifiers: user.identifiers
-        }
+        } : { userUuid }
       };
     } catch (error: any) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          details: error.issues
+        });
+      }
       return reply.status(500).send({
         success: false,
         error: 'Failed to disconnect user',
@@ -319,10 +283,7 @@ export default async function userApi(fastify: FastifyInstance) {
       querystring: {
         type: 'object',
         properties: {
-          userUuid: {
-            type: 'string',
-            description: 'User UUID'
-          }
+          userUuid: { type: 'string' }
         },
         required: ['userUuid']
       },
@@ -348,7 +309,7 @@ export default async function userApi(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { userUuid } = request.query as { userUuid: string };
+      const { userUuid } = getSocketClientQuerySchema.parse(request.query);
       const io = fastify.io;
 
       const result = await getSocketClientByUuid(userUuid, io);
@@ -372,6 +333,13 @@ export default async function userApi(fastify: FastifyInstance) {
         rooms: rooms
       };
     } catch (error: any) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation error',
+          details: error.issues
+        });
+      }
       return reply.status(500).send({
         success: false,
         error: 'Failed to get socket client',

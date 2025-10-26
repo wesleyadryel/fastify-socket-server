@@ -6,6 +6,7 @@ import { redisStorage } from '../storage/redis';
 
 export interface SocketData {
   authenticated?: boolean;
+  token?: string;
   identifiers?: {
     userId?: string;
     userSource?: string;
@@ -46,10 +47,10 @@ export const authMiddleware = async (
     }
     
     socket.data.authenticated = true;
+    socket.data.token = token;
     socket.data.identifiers = payload.identifiers || { userId: payload.userId };
-    socket.data.userUuid = payload.identifiers?.userUuid || payload.identifiers?.userUuid;
+    socket.data.userUuid = payload.identifiers?.userUuid;
     
-    // Store user data in persistent storage using JWT as primary identifier
     redisStorage.updateUser(
       token,
       socket.id,
@@ -58,9 +59,9 @@ export const authMiddleware = async (
       []
     );
 
-    const userUuid = payload.identifiers?.userUuid || payload.identifiers?.userUuid;
+    const userUuid = payload.identifiers?.userUuid;
     if (userUuid) {
-      await redisStorage.whenConnected(socket.id, userUuid);
+      await redisStorage.whenConnected(socket.id, userUuid, token);
     }
     
     next();

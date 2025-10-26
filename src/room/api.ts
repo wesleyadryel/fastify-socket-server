@@ -87,7 +87,7 @@ export default async function roomApi(fastify: FastifyInstance) {
         schema: roomSchemas.getAllRooms
     }, async (request: FastifyRequest, reply: FastifyReply) => {
         try {
-            const rooms = await roomStorage.getAllRooms();
+            const rooms = roomStorage.getAllRoomsFromSocket(fastify.io);
             reply.send({
                 success: true,
                 data: rooms

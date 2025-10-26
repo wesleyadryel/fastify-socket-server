@@ -176,9 +176,7 @@ export function handleDynamicEvents(socket: Socket) {
 
     } catch (err) {
       if (callback) {
-        if (callback) {
-          callback({ success: false, error: 'Event processing failed' });
-        }
+        callback({ success: false, error: 'Event processing failed' });
       }
     }
   });

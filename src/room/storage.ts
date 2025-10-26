@@ -144,37 +144,28 @@ class RoomStorage {
     }
   }
 
-  async getAllRooms(): Promise<Room[]> {
-    if (this.useRedis && this.redis) {
-      try {
-        const pattern = `${storageConfig.roomKeyPrefix}:*`;
-        const rooms: Room[] = [];
-        let cursor = '0';
-
-        do {
-          const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-          cursor = result[0];
-          const keys = result[1];
-
-          for (const key of keys) {
-            if (!key.includes(':members')) {
-              const room = await this.getRoom(key.replace(`${storageConfig.roomKeyPrefix}:`, ''));
-              if (room) {
-                rooms.push(room);
-              }
-            }
-          }
-        } while (cursor !== '0');
-
-        return rooms;
-      } catch (error) {
-        console.error('Redis get all rooms error:', error);
-        return Array.from(this.localCache.values());
+  getAllRoomsFromSocket(io: any): Room[] {
+    const rooms: Room[] = [];
+    const socketRooms = io.sockets.adapter.rooms;
+    
+    for (const [roomId, sockets] of socketRooms) {
+      const room = this.localCache.get(roomId);
+      if (room) {
+        const currentMembers = Array.from(sockets).map(socketId => {
+          const socket = io.sockets.sockets.get(socketId);
+          return socket?.data?.identifiers?.userUuid || socket?.data?.identifiers?.userId || '';
+        }).filter(Boolean);
+        
+        rooms.push({
+          ...room,
+          members: currentMembers.length > 0 ? currentMembers : room.members
+        });
       }
-    } else {
-      return Array.from(this.localCache.values());
     }
+    
+    return rooms;
   }
+
 
   async addMemberToRoom(roomId: string, userId: string, socket?: Socket): Promise<{ success: boolean; message?: string }> {
     const room = await this.getRoom(roomId);

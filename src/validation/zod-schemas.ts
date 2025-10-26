@@ -57,3 +57,34 @@ export const createSubscriberWithSchemaSchema = z.object({
   parameters: z.array(eventParameterSchema).optional(),
 });
 
+export const getUserQuerySchema = z.object({
+  token: z.string().min(1, 'token is required').optional(),
+  userId: z.string().min(1, 'userId is required').optional(),
+  userSource: z.string().min(1, 'userSource is required').optional(),
+}).refine(
+  (data) => data.token || data.userId || data.userSource,
+  {
+    message: 'At least one parameter (token, userId, or userSource) is required',
+  }
+);
+
+export const deleteUserBodySchema = z.object({
+  token: z.string().min(1, 'token is required').optional(),
+  userId: z.string().min(1, 'userId is required').optional(),
+  userSource: z.string().min(1, 'userSource is required').optional(),
+  userUuid: z.string().min(1, 'userUuid is required').optional(),
+}).refine(
+  (data) => data.token || data.userId || data.userSource || data.userUuid,
+  {
+    message: 'At least one parameter (token, userId, userSource, or userUuid) is required',
+  }
+);
+
+export const getUserByTokenParamsSchema = z.object({
+  token: z.string().min(1, 'token is required'),
+});
+
+export const getSocketClientQuerySchema = z.object({
+  userUuid: z.string().min(1, 'userUuid is required'),
+});
+
