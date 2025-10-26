@@ -263,7 +263,7 @@ export default async function roomApi(fastify: FastifyInstance) {
         }
     });
 
-    fastify.post('/rooms/:roomId/members/:userUuid/remove', {
+    fastify.delete('/rooms/:roomId/members/:userUuid', {
         preHandler: [authGuard],
         schema: roomSchemas.removeRoomMember
     }, async (request: FastifyRequest, reply: FastifyReply) => {
