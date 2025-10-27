@@ -34,7 +34,7 @@ class RedisStorage {
   }
 
   private getKeyUserTokenByUuid(userUuid: string): string {
-    return `${storageConfig.userKeyPrefix}:${userUuid}`;
+    return `${storageConfig.userTokenByUuidKeyPrefix}:${userUuid}`;
   }
 
   private getSocketIdToJWTKey(socketId: string): string {

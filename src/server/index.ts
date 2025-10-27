@@ -25,6 +25,8 @@ import {
   initializeStorage,
   shutdownStorage 
 } from '../storage';
+import { subscriberService } from '../subscribers';
+import { defaultSubscribers } from '../subscribers/default-subscribers';
 
 
 const app = fastify({
@@ -60,18 +62,19 @@ app.ready(async (err) => {
   
   await initializeStorage();
   
-  if (process.env.NODE_ENV === 'development') {
-    const { subscriberService } = require('../subscribers');
-    try {
-      subscriberService.createSubscriber({
-        eventListener: 'TEST-EVENT',
-        replicable: true,
-        includeSender: true,
-        description: 'Default test subscriber'
-      });
-    } catch (error: any) {
-
+  // Load default subscribers
+  try {
+    for (const subscriberConfig of defaultSubscribers) {
+      try {
+        subscriberService.createSubscriber(subscriberConfig);
+        console.info(`Loaded default subscriber: ${subscriberConfig.eventListener}`);
+      } catch (error: any) {
+        console.warn(`Failed to load subscriber ${subscriberConfig.eventListener}:`, error.message);
+      }
     }
+    console.info(`Loaded ${defaultSubscribers.length} default subscriber(s)`);
+  } catch (error: any) {
+    console.error('Failed to load default subscribers:', error.message);
   }
   
   reconnectionManager.setIO(app.io);
